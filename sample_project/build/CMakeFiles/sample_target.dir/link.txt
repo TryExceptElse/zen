@@ -1,0 +1,1 @@
+/usr/bin/c++  -std=c++11    CMakeFiles/sample_target.dir/sample.cc.o CMakeFiles/sample_target.dir/main.cc.o  -o sample_target hello/libhello.a 

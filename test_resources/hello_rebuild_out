@@ -1,0 +1,6 @@
+Scanning dependencies of target hello
+[ 20%] Building CXX object hello/CMakeFiles/hello.dir/hello.cc.o
+[ 40%] Linking CXX static library libhello.a
+[ 40%] Built target hello
+[ 60%] Linking CXX executable sample_target
+[100%] Built target sample_target

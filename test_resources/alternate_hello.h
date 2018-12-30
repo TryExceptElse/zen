@@ -1,0 +1,4 @@
+
+
+
+void hello(); // Newline removed.

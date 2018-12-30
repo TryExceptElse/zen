@@ -1,0 +1,26 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/user0/PycharmProjects/zen/test_resources/sample_project_1/hello/hello.h
+
+/home/user0/PycharmProjects/zen/test_resources/sample_project_1/main.cc
+sample.h
+/home/user0/PycharmProjects/zen/test_resources/sample_project_1/sample.h
+hello/hello.h
+/home/user0/PycharmProjects/zen/test_resources/sample_project_1/hello/hello.h
+
+/home/user0/PycharmProjects/zen/test_resources/sample_project_1/sample.cc
+sample.h
+/home/user0/PycharmProjects/zen/test_resources/sample_project_1/sample.h
+iostream
+-
+
+/home/user0/PycharmProjects/zen/test_resources/sample_project_1/sample.h
+vector
+-
+
