@@ -37,6 +37,8 @@ BROKEN_HELLO_CC_PATH = Path(TEST_RESOURCES_PATH, 'broken_hello.cc')
 EXPECTED_OUT_1_PATH = Path(TEST_RESOURCES_PATH, 'expected_out1')
 EXPECTED_OUT_2_PATH = Path(TEST_RESOURCES_PATH, 'expected_out2')
 
+CODE_SAMPLES_PATH = Path(TEST_RESOURCES_PATH, 'code_samples')
+
 with NO_REBUILD_OUT_PATH.open('rb') as f:
     NO_REBUILD_OUT = f.read()
 with FULL_BUILD_OUT_PATH.open('rb') as f:
@@ -382,11 +384,61 @@ class TestSourceContent(TestCase):
             zen.PreprocessorComponent
         )
 
-    def test_functions_are_identified(self):
+    def test_correct_components_are_found(self):
         with Path(TEST_RESOURCES_PATH, 'template_func.cc').open() as src_f:
+            # noinspection PyTypeChecker
             content = zen.SourceContent(src_f)
-            self.assertIn('custom_max', content.used_constructs)
-            self.assertIn('main', content.used_constructs)
+            components = content.component.sub_components
+            self.assertIsInstance(
+                components[0],
+                zen.PreprocessorComponent
+            )
+            self.assertIsInstance(
+                components[1],
+                zen.UsingStatement
+            )
+            self.assertIsInstance(
+                components[2],
+                zen.FunctionDefinition
+            )
+            self.assertEqual(1, len(components[2].construct_content))
+            self.assertIn('custom_max', components[2].construct_content)
+            self.assertIsInstance(
+                components[3],
+                zen.FunctionDefinition
+            )
+            self.assertEqual(1, len(components[3].construct_content))
+            self.assertIn('main', components[3].construct_content)
+
+    def test_correct_nested_components_are_found(self):
+        with ALTERNATE_SAMPLE_H_PATH.open() as src_f:
+            # noinspection PyTypeChecker
+            content = zen.SourceContent(src_f)
+            components = content.component.sub_components
+            self.assertEqual(2, len(components))
+            self.assertIsInstance(components[0], zen.PreprocessorComponent)
+            self.assertIsInstance(components[1], zen.NamespaceComponent)
+            ns_components = components[1].sub_components
+            self.assertEqual(1, len(ns_components))
+            self.assertIsInstance(ns_components[0], zen.CppClassDefinition)
+            self.assertIn('Foo', ns_components[0].construct_content)
+            # noinspection PyUnresolvedReferences
+            class_components = ns_components[0].inner_block.sub_components
+            self.assertEqual(5, len(class_components))
+            self.assertIsInstance(
+                class_components[1],
+                zen.MemberFunctionDefinition
+            )
+            self.assertIn('Foo', class_components[1].construct_content)
+            self.assertIsInstance(
+                class_components[2],
+                zen.MemberFunctionDeclaration
+            )
+            self.assertIn('Print', class_components[2].construct_content)
+            self.assertIsInstance(
+                class_components[4],
+                zen.MiscStatement
+            )
 
 
 class TestSourceCache(TestCase):
@@ -423,6 +475,30 @@ class TestSourcePos(TestCase):
         self.assertEqual('h', chunk[b])
         self.assertEqual('.', chunk[c])
 
+    def test_addition_does_not_modify_operands(self):
+        content = zen.SourceContent('This file\nhas three\nlines.')
+        chunk = zen.Chunk(content)
+        a = chunk.start
+        initial_line_i = a.line_i
+        initial_col_i = a.col_i
+        a + 10
+        self.assertEqual(initial_line_i, a.line_i)
+        self.assertEqual(initial_col_i, a.col_i)
+
+    def test_position_can_be_added_to_to_get_end_pos(self):
+        content = zen.SourceContent('This file\nhas three\nlines.')
+        chunk = zen.Chunk(content)
+        a = chunk.start
+        b = a + 26
+        self.assertEqual(b, chunk.end)
+
+    def test_position_can_be_added_to_to_get_end_pos_on_same_line(self):
+        content = zen.SourceContent('This file\nhas three\nlines.')
+        chunk = zen.Chunk(content)
+        a = chunk.start + 22
+        b = a + 4
+        self.assertEqual(b, chunk.end)
+
     def test_position_can_be_subtracted_from(self):
         content = zen.SourceContent('This file\nhas three\nlines.')
         chunk = zen.Chunk(content)
@@ -442,8 +518,35 @@ class TestSourcePos(TestCase):
         self.assertEqual('h', chunk[b])
         self.assertEqual('l', chunk[c])
 
+    def test_positions_with_same_indices_are_equal(self):
+        content = zen.SourceContent('This file\nhas three\nlines.')
+        a = zen.SourcePos(content, 0, 4, zen.SourceForm.STRIPPED)
+        b = zen.SourcePos(content, 0, 4, zen.SourceForm.STRIPPED)
+        self.assertEqual(a, b)
+
+    def test_positions_with_same_indices_have_same_hash(self):
+        content = zen.SourceContent('This file\nhas three\nlines.')
+        a = zen.SourcePos(content, 0, 4, zen.SourceForm.STRIPPED)
+        b = zen.SourcePos(content, 0, 4, zen.SourceForm.STRIPPED)
+        self.assertEqual(hash(a), hash(b))
+
+    def test_positions_with_different_indices_are_not_equal(self):
+        content = zen.SourceContent('This file\nhas three\nlines.')
+        a = zen.SourcePos(content, 0, 4, zen.SourceForm.STRIPPED)
+        b = zen.SourcePos(content, 1, 4, zen.SourceForm.STRIPPED)
+        self.assertNotEqual(a, b)
+
 
 class TestChunk(TestCase):
+    def test_chunk_created_from_content_has_correct_length(self):
+        content = zen.SourceContent('\n\n\n\n\n\nclass Foo')
+        self.assertEqual(15, len(zen.Chunk(content)))
+
+    def test_chunk_created_from_content_same_string(self):
+        s = '\n\n\n\n\n\nclass Foo'
+        content = zen.SourceContent(s)
+        self.assertEqual(s, str(zen.Chunk(content)))
+
     def test_chunk_index_accessor_works_correctly(self):
         content = zen.SourceContent('This file\nhas three\nlines.')
         chunk = zen.Chunk(content)
@@ -506,7 +609,7 @@ class TestChunk(TestCase):
         content = zen.SourceContent('This file\nhas three\nlines.\nfoo123')
         chunk = zen.Chunk(content)
         self.assertEqual(
-            {'This', 'file', 'has', 'three', 'lines', 'foo123'},  # No period.
+            ['This', 'file', 'has', 'three', 'lines', 'foo123'],  # No period.
             chunk.tokenize()
         )
 
@@ -526,11 +629,63 @@ class TestChunk(TestCase):
         self.assertEqual(2, end_pos.line_i)
         self.assertEqual(0, end_pos.col_i)
 
+    def test_bracket_pair_can_be_found_when_quoted_brackets_are_used(self):
+        content = zen.SourceContent('{foo {\n{foo("bracket: }")};\n}\n}')
+        chunk = zen.Chunk(content)
+        first_bracket_pos = chunk.pos(0, -2)
+        end_pos = chunk.find_pair(first_bracket_pos)
+        self.assertEqual(2, end_pos.line_i)
+        self.assertEqual(0, end_pos.col_i)
+
+    def test_bracket_pair_can_be_found_when_bracket_char_is_used(self):
+        content = zen.SourceContent("{foo {\n{foo('}')};\n}\n}")
+        chunk = zen.Chunk(content)
+        first_bracket_pos = chunk.pos(0, -2)
+        end_pos = chunk.find_pair(first_bracket_pos)
+        self.assertEqual(2, end_pos.line_i)
+        self.assertEqual(0, end_pos.col_i)
+
+    def test_quote_end_can_be_found(self):
+        content = zen.SourceContent('foo("some [string]\\" argument")')
+        chunk = zen.Chunk(content)
+        first_quote_pos = chunk.pos(0, 4)
+        end_pos = chunk.find_quote_end(first_quote_pos)
+        self.assertEqual(0, end_pos.line_i)
+        self.assertEqual(29, end_pos.col_i)
+
     def test_line_can_be_retrieved_from_pos(self):
         content = zen.SourceContent('{Some bracket {\n{foo};\n}\n}')
         chunk = zen.Chunk(content)
         pos = chunk.pos(1, 2)
         self.assertEqual(1, chunk.line(pos).index)
+
+    def test_chunk_can_strip_whitespace_lines(self):
+        content = zen.SourceContent('\n\n\nfoo("some arg")\n\n')
+        chunk = zen.Chunk(content)
+        stripped = chunk.strip()
+        self.assertEqual(3, stripped.start.line_i)
+        self.assertEqual(0, stripped.start.col_i)
+        self.assertEqual(3, stripped.end.line_i)
+        self.assertEqual(15, stripped.end.col_i)
+
+    def test_chunk_does_not_strip_non_whitespace_chars(self):
+        content = zen.SourceContent('\n\n\nfoo("some arg")')
+        chunk = zen.Chunk(content)
+        stripped = chunk.strip()
+        self.assertEqual(3, stripped.start.line_i)
+        self.assertEqual(0, stripped.start.col_i)
+        self.assertEqual(3, stripped.end.line_i)
+        self.assertEqual(15, stripped.end.col_i)
+        self.assertEqual('foo("some arg")', str(stripped))
+
+    def test_chunk_can_be_stripped_when_trailing_spaces_are_present(self):
+        content = zen.SourceContent('\n\n\nfoo("some arg") \n\n')
+        chunk = zen.Chunk(content)
+        stripped = chunk.strip()
+        self.assertEqual(3, stripped.start.line_i)
+        self.assertEqual(0, stripped.start.col_i)
+        self.assertEqual(3, stripped.end.line_i)
+        self.assertEqual(15, stripped.end.col_i)
 
     def test_chunk_hash_is_same_for_chunks_with_same_stripped_content(self):
         content_a = zen.SourceContent('This file\nhas three\nlines.')
@@ -558,6 +713,173 @@ class TestChunk(TestCase):
         chunk_b = zen.Chunk(content_b)
         hash_b = chunk_b.content_hash
         self.assertNotEqual(hash_a, hash_b)
+
+
+class TestCppClassDefinition(TestCase):
+    def get_class_def(self) -> zen.CppClassDefinition:
+        with Path(CODE_SAMPLES_PATH, 'sample_class').open() as src_f:
+            # noinspection PyTypeChecker
+            content = zen.SourceContent(src_f)
+            definition = content.component.sub_components[0]
+            self.assertIsInstance(definition, zen.CppClassDefinition)
+            return definition
+
+    def test_class_produces_correctly_named_constructs(self):
+        definition = self.get_class_def()
+        self.assertEqual(2, len(definition.construct_content))
+        self.assertIn('Foo', definition.construct_content)
+        self.assertIn('Print', definition.construct_content)
+
+    def test_class_members_are_not_in_sub_components(self):
+        definition = self.get_class_def()
+        self.assertEqual([], definition.sub_components)
+
+    def test_correct_number_of_member_components_are_found(self):
+        definition = self.get_class_def()
+        self.assertEqual(5, len(definition.member_components))
+
+    def test_class_labels_are_found(self):
+        definition = self.get_class_def()
+        components = definition.member_components
+        self.assertIsInstance(components[0], zen.Label)
+        self.assertIsInstance(components[3], zen.Label)
+
+    def test_class_constructor_has_correct_type(self):
+        definition = self.get_class_def()
+        components = definition.member_components
+        self.assertIsInstance(components[1], zen.MemberFunctionDefinition)
+
+    def test_member_function_declaration_has_correct_type(self):
+        definition = self.get_class_def()
+        components = definition.member_components
+        self.assertIsInstance(components[2], zen.MemberFunctionDeclaration)
+
+    def test_member_variable_declaration_has_correct_type(self):
+        definition = self.get_class_def()
+        components = definition.member_components
+        self.assertIsInstance(components[4], zen.MiscStatement)
+
+    def test_tokens_are_correct(self):
+        definition = self.get_class_def()
+        self.assertEqual(['class', 'Foo'], definition.tokens)
+
+    def test_exposed_content_only_includes_prefix(self):
+        definition = self.get_class_def()
+        self.assertEqual(1, len(definition.exposed_content))
+        self.assertEqual('class Foo', str(definition.exposed_content[0]))
+
+
+class TestFunctionDeclaration(TestCase):
+    pass
+
+
+class TestMemberFunctionDeclaration(TestCase):
+    def test_construct_is_correctly_named(self):
+        content = zen.SourceContent('void Print() const;')
+        declaration = zen.MemberFunctionDeclaration(content.component.chunk)
+        self.assertEqual(1, len(declaration.construct_content))
+        self.assertIn('Print', declaration.construct_content)
+
+    def test_whole_declaration_is_in_external_content(self):
+        s = 'void Print() const;'
+        content = zen.SourceContent(s)
+        declaration = zen.MemberFunctionDeclaration(content.component.chunk)
+        self.assertEqual(s, str(declaration.exposed_content[0]))
+
+
+class TestMemberFunctionDefinition(TestCase):
+    def test_construct_is_correctly_named(self):
+        with Path(CODE_SAMPLES_PATH, 'sample_member_func').open() as src_f:
+            content_s = src_f.read()
+        content = zen.SourceContent(content_s)
+        definition = zen.MemberFunctionDefinition(content.component.chunk)
+        self.assertEqual(1, len(definition.construct_content))
+        self.assertIn('Print', definition.construct_content)
+
+    def test_code_preceding_function_block_is_external(self):
+        with Path(CODE_SAMPLES_PATH, 'sample_member_func').open() as src_f:
+            content_s = src_f.read()
+        content = zen.SourceContent(content_s)
+        definition = zen.MemberFunctionDefinition(content.component.chunk)
+        self.assertEqual(1, len(definition.construct_content))
+        self.assertIn('Print', definition.construct_content)
+
+
+class TestControlComponent(TestCase):
+    def test_control_block_can_be_recognized(self):
+        content = zen.SourceContent('for (i = 0; i < 5; ++i) { a += 5; }')
+        components = content.component.sub_components
+        self.assertEqual(1, len(components))
+        self.assertIsInstance(components[0], zen.ControlBlock)
+
+    def test_control_block_has_correct_sub_components(self):
+        content = zen.SourceContent('for (i = 0; i < 5; ++i) { a += 5; }')
+        control_component = zen.ControlBlock(content.component.chunk)
+        sub_components = control_component.sub_components
+        self.assertEqual(1, len(sub_components))
+        self.assertIsInstance(sub_components[0], zen.MiscStatement)
+
+    def test_exposed_content_only_includes_prefix(self):
+        content = zen.SourceContent('for (i = 0; i < 5; ++i){ a += 5; }')
+        control_component = zen.ControlBlock(content.component.chunk)
+        self.assertEqual(1, len(control_component.exposed_content))
+        self.assertEqual(
+            'for (i = 0; i < 5; ++i)',
+            str(control_component.exposed_content[0])
+        )
+
+    def test_correct_tokens_are_present(self):
+        content = zen.SourceContent('for (i = 0; i < 5; ++i){ a += 5; }')
+        component = zen.ControlBlock(content.component.chunk)
+        self.assertEqual(['for', 'i', '0', 'i', '5', 'i'], component.tokens)
+
+
+class TestNamespace(TestCase):
+    def test_exposed_content_only_includes_prefix(self):
+        content = zen.SourceContent(
+            'namespace ns{ \n'
+            'void foo() { std::cout << "hi"; }\n'
+            '}  // namespace ns\n'
+        )
+        namespace = zen.NamespaceComponent(content.component.chunk)
+        self.assertEqual(1, len(namespace.exposed_content))
+        self.assertEqual('namespace ns', str(namespace.exposed_content[0]))
+
+
+class TestMiscComponent(TestCase):
+    def test_correct_tokens_are_present(self):
+        content = zen.SourceContent('std::vector<int> numbers_;')
+        chunk = content.component.chunk
+        statement = zen.MiscStatement(chunk)
+        self.assertEqual(
+            ['std', 'vector', 'int', 'numbers_'],
+            statement.tokens
+        )
+
+
+class TestFindInScope(TestCase):
+    def test_find_in_scope_finds_bracket_start(self):
+        content = zen.SourceContent(
+            '\n\n\n\ntemplate <typename T>\n'
+            'T custom_max(T x, T y)\n{\n'
+            'return (x > y)? x: y;\n'
+            '}'
+        )
+        chunk = content.component.chunk
+        result = zen.find_in_scope('{', chunk)
+        self.assertEqual(6, result.line_i)
+        self.assertEqual(0, result.col_i)
+
+
+class TestFindScopeTokens(TestCase):
+    def test_scope_tokens_are_correct(self):
+        content = zen.SourceContent(
+            '\n\n\n\ntemplate <typename T>\n'
+            'T custom_max(T x, T y)\n'
+        )
+        chunk = content.component.chunk
+        tokens = zen.scope_tokens(chunk)
+        self.assertEqual(['template', 'T', 'custom_max'], tokens)
 
 
 class TestIterHash(TestCase):
