@@ -554,6 +554,13 @@ class TestChunk(TestCase):
         self.assertEqual('h', chunk[10])
         self.assertEqual('.', chunk[-1])
 
+    def test_chunk_index_accessor_works_when_chunk_starts_mid_line(self):
+        content = zen.SourceContent('This file\nhas three\nlines.')
+        start_pos = zen.SourcePos(content, 0, 5, zen.SourceForm.STRIPPED)
+        chunk = zen.Chunk(content, start=start_pos)
+        assert chunk[5] == 'h'
+        assert chunk[15] == 'l'
+
     def test_source_pos_can_be_passed_to_getitem(self):
         content = zen.SourceContent('This file\nhas three\nlines.')
         chunk = zen.Chunk(content)

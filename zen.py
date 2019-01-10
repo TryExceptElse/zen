@@ -201,7 +201,7 @@ class Target:
         This method should only be called if target is known.
         :return: None
         """
-        sub.call(['touch', '-c', str(self.file_path.absolute())])
+        sub.run(['touch', '-c', str(self.file_path.absolute())], check=True)
 
     @staticmethod
     def type_from_path(path: ty.Union[str, Path]) -> TargetType:
@@ -429,7 +429,7 @@ class CompileObject:
         Un-Marks this object for re-compilation.
         :return: None
         """
-        sub.call(['touch', '-c', str(self.path.absolute())])
+        sub.run(['touch', '-c', str(self.path.absolute())], check=True)
 
     @property
     def m_time(self):
@@ -1117,15 +1117,14 @@ class Chunk:
     def tokenize(self, regex: str = r"[\w0-9]+") -> ty.List[str]:
         tokens: ty.List[str] = []
         if self.start.line_i == self.end.line_i:
-            return [token for token in re.findall(regex, str(self))]
+            return re.findall(regex, str(self))
         for line in self.lines:
             s = line.s(self.form)
             if line == self.lines[0]:
                 s = s[self.start.col_i:]
             elif line == self.lines[-1]:
                 s = s[:self.end.col_i]
-            for token in re.findall(regex, s):
-                tokens.append(token)
+            tokens += re.findall(regex, s)
         return tokens
 
     def find_pair(self, start_pos: 'SourcePos') -> 'SourcePos':
@@ -1211,6 +1210,11 @@ class Chunk:
 
     @property
     def content_hash(self) -> int:
+        """
+        Hashes content of Chunk.
+        :return: hash int
+        :rtype int
+        """
         return iter_hash((s[:-1] if s.endswith('\n') else s)
                          for s in self.line_strings)
 
@@ -1250,6 +1254,14 @@ class Chunk:
         return Chunk(self.file_content, start, stop)
 
     def _char_at_pos(self, pos: 'SourcePos') -> str:
+        """
+        Gets character at the position identified by the
+        passed SourcePos.
+        :param pos: Position in SourceContent.
+        :return: char str
+        :rtype: str
+        :raises IndexError if SourcePos outside Chunk.
+        """
         if not self.start.line_i <= pos.line_i <= self.end.line_i:
             raise IndexError(
                 f'Line index {pos.line_i} outside chunk lines: '
@@ -1265,6 +1277,15 @@ class Chunk:
         return self.file_content.lines[pos.line_i].s(self.form)[pos.col_i]
 
     def _char_at_index(self, i: int) -> str:
+        """
+        Helper method to retrieve character at passed index
+        from Chunk.
+
+        :param i: int index of character to be retrieved.
+        :return: char str.
+        :rtype: str
+        :raises IndexError if index is outside Chunk.
+        """
         if i < 0:
             i += len(self)
         if i not in self.index_range:
@@ -1275,11 +1296,14 @@ class Chunk:
         assert isinstance(self.start, SourcePos)
         search_i = 0
         for line in self.lines:
-            if search_i + len(line.s(self.form)) > i:
+            usable_len = len(line.s(self.form))
+            if line == self.first_line:
+                usable_len -= self.start.col_i
+            if search_i + usable_len > i:
                 containing_line = line
                 relative_col = i - search_i
                 break
-            search_i += len(line.s(self.form))
+            search_i += usable_len
         else:
             raise RuntimeError('This should not be reached.')
         if containing_line is self.lines[0]:
@@ -1624,6 +1648,9 @@ class Block(Component):
 
 
 class NamespaceComponent(Component):
+    """
+    Component containing the code that comprises a cpp namespace.
+    """
     def __init__(
             self,
             file_content: ty.Union['SourceContent', 'Chunk'],
@@ -1902,6 +1929,18 @@ class UsingStatement(Component):
 
 
 def find_in_scope(sub_str: str, chunk: 'Chunk') -> 'SourcePos':
+    """
+    Finds passed sub_str within the scope that begins at the start of
+    the passed chunk. Ignores quoted strings within chunk.
+
+    Chunk is assumed to contain no content from a higher level scope
+    than that at the beginning of the chunk, and is assumed not to
+    begin within a quote.
+
+    :param sub_str:
+    :param chunk:
+    :return:
+    """
     s = ''
     pos = chunk.start
     while True:
@@ -1927,6 +1966,17 @@ def find_in_scope(sub_str: str, chunk: 'Chunk') -> 'SourcePos':
 
 
 def scope_tokens(chunk: 'Chunk', regex: str = r"[\w0-9]+") -> ty.List[str]:
+    """
+    Gets tokens in the highest level scope of the passed chunk.
+    Passed chunk should begin within the scope that tokens
+    are to be retrieved from, and not contain any content from a
+    higher level scope. IE: Chunk should end before the function /
+    class / etc ends.
+
+    :param chunk: Chunk to check for tokens.
+    :param regex: Optional regex to use for finding tokens.
+    :return: List[str]
+    """
     s = ''
     pos = chunk.start
     while pos != chunk.end:
@@ -1941,13 +1991,20 @@ def scope_tokens(chunk: 'Chunk', regex: str = r"[\w0-9]+") -> ty.List[str]:
             pos += 1
         except ValueError:
             break
-    return [token for token in re.findall(regex, s)]
+    return re.findall(regex, s)
 
 
 def update_content(
         a: ty.Dict[str, ty.List['Component']],
         b: ty.Dict[str, ty.List['Component']]
 ) -> None:
+    """
+    Adds component content of dict b to dict a.
+
+    :param a: Dictionary of components to be added to.
+    :param b: Dictionary of components to add.
+    :return: None
+    """
     for k, v in b.items():
         try:
             content = a[k]
