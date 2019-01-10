@@ -246,10 +246,7 @@ class TestBuildDir(TestCase):
                 )
 
                 # Build with broken source
-                self.assertRaises(
-                    sub.CalledProcessError,
-                    lambda: self.make(build_dir)
-                )
+                self.assertRaises(sub.CalledProcessError, self.make, build_dir)
 
                 # Fix source and rebuild
                 shutil.copy(

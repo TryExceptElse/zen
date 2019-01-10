@@ -30,6 +30,9 @@ class ComponentCreationError(ValueError):
 
 
 class Status(enum.IntEnum):
+    """
+    Change status of a SourceFile, CompileObject, or Target.
+    """
     UNCHECKED = 1
     NO_CHANGE = 2
     MINOR_CHANGE = 3
@@ -385,7 +388,7 @@ class CompileObject:
         else:
             self.status = Status.CHANGED
 
-        if self.status.MINOR_CHANGE:
+        if self.status == self.status.MINOR_CHANGE:
             self.avoid_build()
 
     def remember(self) -> None:
@@ -422,7 +425,7 @@ class CompileObject:
         :rtype: bool
         """
         cached_hash = self.build_dir.get_object_cache(self).used_content_hash
-        return self.used_content_hash == cached_hash
+        return self.used_content_hash != cached_hash
 
     def avoid_build(self) -> None:
         """
@@ -627,9 +630,7 @@ class SourceCache:
         :param source: SourceFile
         :return: None
         """
-        d = {
-            self.STRIPPED_HASH_K: source.stripped_hash
-        }
+        d = {self.STRIPPED_HASH_K: source.stripped_hash}
         with self.path.open('w') as f:
             json.dump(d, f)
 
@@ -679,9 +680,7 @@ class ObjectCache:
         :param obj: CompileObject
         :return: None
         """
-        d = {
-            self.USED_CONTENT_HASH_K: obj.used_content_hash
-        }
+        d = {self.USED_CONTENT_HASH_K: obj.used_content_hash}
         with self.path.open('w') as f:
             json.dump(d, f)
 
@@ -2043,6 +2042,9 @@ class Construct:
         :rtype: None
         """
         self.content += content
+
+    def __repr__(self) -> str:
+        return f'Construct[{self.name}, used={self.used}]'
 
 
 #######################################################################
