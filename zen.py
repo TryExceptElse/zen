@@ -1235,6 +1235,14 @@ class Chunk:
     def end(self) -> 'SourcePos':
         return self._end
 
+    @property
+    def bounds_description(self) -> str:
+        if self.start.line_i == self.end.line_i:
+            return f'Line {self.start.line_i}, ' \
+                f'Chars {self.start.col_i} to {self.end.col_i}.'
+        else:
+            return f'Line {self.start.line_i} to line {self.end.line_i}'
+
     def _slice(self, chunk_slice: slice):
         if chunk_slice.step:
             raise ValueError('Chunk cannot be sliced using step argument.')
@@ -1646,6 +1654,9 @@ class Block(Component):
                     pos = component.chunk.end
         return self._sub_components
 
+    def __repr__(self) -> str:
+        return f'Block[{self.chunk.bounds_description}]'
+
 
 class NamespaceComponent(Component):
     """
@@ -1856,7 +1867,7 @@ class CppClassDefinition(Component):
     @property
     def construct_content(self) -> ty.Dict[str, ty.List['Component']]:
         own_content = self.inner_block.sub_components
-        construct_content = {self.name: own_content}
+        construct_content = {self.name: own_content.copy()}
         for component in self.inner_block.sub_components:
             update_content(construct_content, component.construct_content)
         return construct_content
