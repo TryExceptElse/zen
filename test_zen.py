@@ -263,6 +263,36 @@ class TestBuildDir(TestCase):
         finally:
             os.chdir(original_dir)
 
+    def test_change_in_unused_member_function_does_not_cause_rebuild(self):
+        original_dir = os.curdir
+        try:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                project_dir, build_dir = self.set_up_project_dir(temp_dir)
+                # Add original red herring class.
+                shutil.copy(
+                    Path(TEST_RESOURCES_PATH, 'herring_sample1.h'),
+                    Path(project_dir, 'sample.h')
+                )
+
+                # First make - full project should build.
+                first_out = self.make(build_dir)
+                self.assertEqual(FULL_BUILD_OUT, first_out)
+                # Second make with no source changes:
+                # nothing should be rebuilt.
+                second_out = self.make(build_dir)
+                self.assertEqual(NO_REBUILD_OUT, second_out)
+                # Change red herring class.
+                shutil.copy(
+                    Path(TEST_RESOURCES_PATH, 'herring_sample2.h'),
+                    Path(project_dir, 'sample.h')
+                )
+                # Since no substantive changes have been made,
+                # no objects should need to be rebuilt.
+                last_out = self.make(build_dir)
+                self.assertEqual(NO_REBUILD_OUT, last_out)
+        finally:
+            os.chdir(original_dir)
+
 
 class TestTarget(TestCase):
     def tearDown(self):
@@ -496,6 +526,16 @@ class TestSourcePos(TestCase):
         b = a + 4
         self.assertEqual(b, chunk.end)
 
+    def test_negative_number_can_be_added(self):
+        content = zen.SourceContent('This file\nhas three\nlines.')
+        chunk = zen.Chunk(content)
+        a = chunk.end + -1
+        b = chunk.end + -16
+        c = chunk.end + -26
+        self.assertEqual('T', chunk[c])
+        self.assertEqual('h', chunk[b])
+        self.assertEqual('.', chunk[a])
+
     def test_position_can_be_subtracted_from(self):
         content = zen.SourceContent('This file\nhas three\nlines.')
         chunk = zen.Chunk(content)
@@ -505,6 +545,16 @@ class TestSourcePos(TestCase):
         self.assertEqual('T', chunk[c])
         self.assertEqual('h', chunk[b])
         self.assertEqual('.', chunk[a])
+
+    def test_negative_number_can_be_subtracted(self):
+        content = zen.SourceContent('This file\nhas three\nlines.')
+        chunk = zen.Chunk(content)
+        a = chunk.start
+        b = a - -10
+        c = a - -25
+        self.assertEqual('T', chunk[a])
+        self.assertEqual('h', chunk[b])
+        self.assertEqual('.', chunk[c])
 
     def test_next_line_can_be_accessed(self):
         content = zen.SourceContent('This file\nhas three\nlines.')
