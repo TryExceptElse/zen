@@ -1,6 +1,5 @@
 from unittest import TestCase
 
-import collections
 import os
 from pathlib import Path
 import shutil
@@ -466,29 +465,6 @@ class TestSourceContent(TestCase):
                 class_components[4],
                 zen.MiscStatement
             )
-
-
-class TestSourceCache(TestCase):
-    FakeSourceFile = collections.namedtuple(
-        'FakeSourceFile', (
-            'stripped_hash'
-        )
-    )
-
-    def test_cache_and_recovery(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Create source
-            fake_source = self.FakeSourceFile(5)
-
-            # Create cache
-            cache_path = Path(temp_dir, 'cache')
-            cache = zen.SourceCache(cache_path)
-            # noinspection PyTypeChecker
-            cache.cache(fake_source)
-
-            # Create second cache to check that values can be restored.
-            cache2 = zen.SourceCache(cache_path)
-            self.assertEqual(5, cache2.stripped_hash)
 
 
 class TestSourcePos(TestCase):

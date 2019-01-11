@@ -75,6 +75,7 @@ class BuildDir:
             for target in self.targets.values()
         }
         self.sources = self._find_sources()
+        self._hash_cache: ty.Dict[str, int] = None
 
     def meditate(self) -> None:
         """
@@ -85,9 +86,18 @@ class BuildDir:
         [target.meditate() for target in self.targets.values()]
 
     def remember(self) -> None:
-        [self.get_source_cache(dep).cache(dep) for dep in self.sources]
+        """
+        Stores information about the current form of the source code,
+        so that it may later be determined later what has been changed
+        substantially enough to require recompilation.
+        :return: None
+        """
+        for dep in self.sources:
+            dep.remember(self.hash_cache)
         for target in self.targets.values():
             target.remember()
+        with self.cache_path.open('w') as f:
+            json.dump(self.hash_cache, f)
 
     def _find_targets(self) -> ty.Dict[str, 'Target']:
         """
@@ -110,25 +120,19 @@ class BuildDir:
                     dependencies.add(dependency)
         return dependencies
 
-    def get_source_cache(self, src: 'SourceFile') -> 'SourceCache':
+    @property
+    def hash_cache(self) -> ty.Dict[str, int]:
         """
         Gets SourceCache storing previously compiled values.
-        :param src: SourceFile
-        :return: SourceCache
+        :return: Cache dict.
         """
-        if not self.cache_path.exists():
-            self.cache_path.mkdir()
-        return SourceCache(Path(self.cache_path, src.hex))
-
-    def get_object_cache(self, compile_obj: 'CompileObject') -> 'ObjectCache':
-        """
-        Gets SourceCache storing previously compiled values.
-        :param compile_obj: CompileObject
-        :return: SourceCache
-        """
-        if not self.cache_path.exists():
-            self.cache_path.mkdir()
-        return ObjectCache(Path(self.cache_path, compile_obj.hex))
+        if self._hash_cache is None:
+            try:
+                with self.cache_path.open() as f:
+                    self._hash_cache = json.load(f)
+            except FileNotFoundError:
+                self._hash_cache = {}
+        return self._hash_cache
 
     @property
     def cache_path(self) -> Path:
@@ -381,14 +385,10 @@ class CompileObject:
             self.status = Status.NO_CHANGE
             return
 
-        if not self._has_code_changes():
-            self.status = Status.MINOR_CHANGE
-        elif not self._has_used_content_change():
-            self.status = Status.MINOR_CHANGE
-        else:
+        if self._has_code_changes() and self._has_used_content_change():
             self.status = Status.CHANGED
-
-        if self.status == self.status.MINOR_CHANGE:
+        else:
+            self.status = Status.MINOR_CHANGE
             self.avoid_build()
 
     def remember(self) -> None:
@@ -397,8 +397,7 @@ class CompileObject:
         found the next time zen is run.
         :return: None
         """
-        cache = self.build_dir.get_object_cache(self)
-        cache.cache(self)
+        self.build_dir.hash_cache[self.hex] = self.used_content_hash
 
     def _has_code_changes(self) -> bool:
         """
@@ -408,13 +407,7 @@ class CompileObject:
         :rtype: bool
         """
         for source in self.sources:
-            try:
-                cache = self.build_dir.get_source_cache(source)
-            except KeyError:
-                # If no cache exists for source, then the code should
-                # be considered to have changed.
-                return True
-            if source.substantive_changes(cache):
+            if source.substantive_changes(self.build_dir.hash_cache):
                 return True
         return False
 
@@ -424,7 +417,7 @@ class CompileObject:
         :return: True if used content has changed.
         :rtype: bool
         """
-        cached_hash = self.build_dir.get_object_cache(self).used_content_hash
+        cached_hash = self.build_dir.hash_cache[self.hex]
         return self.used_content_hash != cached_hash
 
     def avoid_build(self) -> None:
@@ -564,15 +557,20 @@ class SourceFile:
     def clear(cls) -> None:
         cls._source_files.clear()
 
-    def substantive_changes(self, cache: 'SourceCache') -> bool:
+    def substantive_changes(self, cache: ty.Dict[str, int]) -> bool:
         """
         Check for changes against cache.
 
         :param cache: SourceCache
         :return: bool which is True if changes have occurred.
         """
-        if self.stripped_hash != cache.stripped_hash:
+        try:
+            return self.stripped_hash != cache[self.hex]
+        except KeyError:
             return True
+
+    def remember(self, cache: ty.Dict[str, int]) -> None:
+        cache[self.hex] = self.stripped_hash
 
     @property
     def m_time(self) -> float:
@@ -611,110 +609,6 @@ class SourceFile:
 
     def __repr__(self) -> str:
         return f'SourceFile[{os.path.basename(str(self.path))}]'
-
-
-class SourceCache:
-    """
-    Handles access of previously cached source file information.
-    """
-    STRIPPED_HASH_K = 'stripped_hash'
-
-    def __init__(self, path: Path) -> None:
-        self.path = path
-        self._access_time: ty.Optional[float] = 0
-        self._accessed_d: ty.Optional[ty.Dict[str, ty.Any]] = None
-
-    def cache(self, source: 'SourceFile') -> None:
-        """
-        Updates cached data from passed source.
-        :param source: SourceFile
-        :return: None
-        """
-        d = {self.STRIPPED_HASH_K: source.stripped_hash}
-        with self.path.open('w') as f:
-            json.dump(d, f)
-
-    @property
-    def exists(self) -> bool:
-        return self.path.exists()
-
-    @property
-    def m_time(self) -> float:
-        """
-        Gets modification time of source file.
-        :return: float time in seconds since epoch.
-        """
-        return os.path.getmtime(self.path.absolute())
-
-    @property
-    def _d(self) -> ty.Dict[str, ty.Any]:
-        if self._accessed_d is None or self._access_time < self.m_time:
-            self._access_time = time.time()
-            with self.path.open() as f:
-                self._accessed_d = json.load(f)
-        return self._accessed_d
-
-    @property
-    def stripped_hash(self) -> int:
-        """
-        Gets hash of the cached source file's raw content.
-        :rtype: int
-        """
-        return self._d[self.STRIPPED_HASH_K]
-
-
-class ObjectCache:
-    """
-    Handles access of previously cached compile object information.
-    """
-    USED_CONTENT_HASH_K = 'used_content_hash'
-
-    def __init__(self, path: Path) -> None:
-        self.path = path
-        self._access_time: ty.Optional[float] = 0
-        self._accessed_d: ty.Optional[ty.Dict[str, ty.Any]] = None
-
-    def cache(self, obj: 'CompileObject') -> None:
-        """
-        Updates cached data from passed source.
-        :param obj: CompileObject
-        :return: None
-        """
-        d = {self.USED_CONTENT_HASH_K: obj.used_content_hash}
-        with self.path.open('w') as f:
-            json.dump(d, f)
-
-    @property
-    def exists(self) -> bool:
-        """
-        Check whether object cache file exists in the system already.
-        :return: bool
-        """
-        return self.path.exists()
-
-    @property
-    def m_time(self) -> float:
-        """
-        Gets modification time of source file.
-        :return: float time in seconds since epoch.
-        """
-        return os.path.getmtime(self.path.absolute())
-
-    @property
-    def _d(self) -> ty.Dict[str, ty.Any]:
-        if self._accessed_d is None or self._access_time < self.m_time:
-            self._access_time = time.time()
-            with self.path.open() as f:
-                self._accessed_d = json.load(f)
-        return self._accessed_d
-
-    @property
-    def used_content_hash(self) -> int:
-        """
-        Gets hash of the cached compile object used_content_hash.
-        :rtype: int
-        """
-        return self._d[self.USED_CONTENT_HASH_K]
 
 
 #######################################################################
@@ -921,6 +815,8 @@ class SourcePos:
         self.col_i = col_i
 
     def __add__(self, n: int) -> 'SourcePos':
+        if n < 0:
+            return self - abs(n)
         original_n = n
         line = self.file_content.lines[self.line_i]
         remaining_chars = len(line.s(self.form)) - self.col_i
@@ -944,6 +840,8 @@ class SourcePos:
                 f'{original_n} is too large.')
 
     def __sub__(self, n: int) -> 'SourcePos':
+        if n < 0:
+            return self + abs(n)
         original_n = n
         remaining_chars = self.col_i
         if n <= remaining_chars:
@@ -2023,10 +1921,6 @@ def update_content(
         content += v
 
 
-#######################################################################
-# Source Constructs
-
-
 class Construct:
     """
     """
@@ -2061,8 +1955,7 @@ def clear() -> None:
 
 def main():
     global verbose_opt
-    parser = argparse.ArgumentParser(
-        description='Run Zen to focus compilation')
+    parser = argparse.ArgumentParser(description='Focus compilation')
     parser.add_argument('task')
     parser.add_argument('build_dir')
     parser.add_argument('-v', '--verbose', action='store_true')
