@@ -5,6 +5,7 @@ from pathlib import Path
 import shutil
 import subprocess as sub
 import tempfile
+import typing as ty
 
 import zen
 
@@ -24,30 +25,26 @@ SAMPLE_CC_PATH = Path(os.path.join(FAKE_PROJECT_PATH, 'sample.cc'))
 MAIN_CC_PATH = Path(os.path.join(FAKE_PROJECT_PATH, 'main.cc'))
 
 TEST_SOURCE_DIR_PATH = Path(TEST_RESOURCES_PATH, 'test_source_dir_1')
-FULL_BUILD_OUT_PATH = Path(TEST_RESOURCES_PATH, 'full_build_out')
-NO_REBUILD_OUT_PATH = Path(TEST_RESOURCES_PATH, 'no_rebuild_out')
 ALTERNATE_SAMPLE_H_PATH = Path(TEST_RESOURCES_PATH, 'alternate_sample.h')
 ALTERNATE_HELLO_H_PATH = Path(TEST_RESOURCES_PATH, 'alternate_hello.h')
 
-HELLO_REBUILD_OUT_PATH = Path(TEST_RESOURCES_PATH, 'hello_rebuild_out')
 CHANGED_HELLO_CC_PATH = Path(TEST_RESOURCES_PATH, 'changed_hello.cc')
 BROKEN_HELLO_CC_PATH = Path(TEST_RESOURCES_PATH, 'broken_hello.cc')
 
-EXPECTED_OUT_1_PATH = Path(TEST_RESOURCES_PATH, 'expected_out1')
-EXPECTED_OUT_2_PATH = Path(TEST_RESOURCES_PATH, 'expected_out2')
+OUT_DIR_PATH = Path(TEST_RESOURCES_PATH, 'output')
 
 CODE_SAMPLES_PATH = Path(TEST_RESOURCES_PATH, 'code_samples')
 
-with NO_REBUILD_OUT_PATH.open('rb') as f:
-    NO_REBUILD_OUT = f.read()
-with FULL_BUILD_OUT_PATH.open('rb') as f:
-    FULL_BUILD_OUT = f.read()
-with HELLO_REBUILD_OUT_PATH.open('rb') as f:
-    HELLO_REBUILD_OUT = f.read()
-with EXPECTED_OUT_1_PATH.open('rb') as f:
-    EXPECTED_OUT_1 = f.read()
-with EXPECTED_OUT_2_PATH.open('rb') as f:
-    EXPECTED_OUT_2 = f.read()
+
+def get_output_content_dict():
+    d = {}
+    for name in os.listdir(OUT_DIR_PATH):
+        with Path(OUT_DIR_PATH, name).open('rb') as f:
+            d[name] = f.read()
+    return d
+
+
+_out: ty.Dict[str, bytes] = get_output_content_dict()
 
 
 class TestBuildDir(TestCase):
@@ -89,11 +86,11 @@ class TestBuildDir(TestCase):
 
                 # First make - full project should build.
                 first_out = make()
-                self.assertEqual(FULL_BUILD_OUT, first_out)
+                self.assertEqual(_out['full_build'], first_out)
                 # Second make with no source changes:
                 # nothing should be rebuilt.
                 second_out = make()
-                self.assertEqual(NO_REBUILD_OUT, second_out)
+                self.assertEqual(_out['no_rebuild'], second_out)
                 # Change docs and whitespace in header.
                 shutil.copy(
                     ALTERNATE_SAMPLE_H_PATH.absolute(),
@@ -102,7 +99,7 @@ class TestBuildDir(TestCase):
                 # Since no substantive changes have been made,
                 # no objects should need to be rebuilt.
                 last_out = make()
-                self.assertEqual(NO_REBUILD_OUT, last_out)
+                self.assertEqual(_out['no_rebuild'], last_out)
         finally:
             os.chdir(original_dir)
 
@@ -155,12 +152,12 @@ class TestBuildDir(TestCase):
 
                 # First make - full project should build.
                 first_out = self.make(build_dir)
-                self.assertEqual(FULL_BUILD_OUT, first_out)
+                self.assertEqual(_out['full_build'], first_out)
 
                 # Second make with no source changes:
                 # nothing should be rebuilt.
                 second_out = self.make(build_dir)
-                self.assertEqual(NO_REBUILD_OUT, second_out)
+                self.assertEqual(_out['no_rebuild'], second_out)
 
                 # Change docs and whitespace in header.
                 shutil.copy(
@@ -171,7 +168,7 @@ class TestBuildDir(TestCase):
                 # Since no substantive changes have been made,
                 # no objects should need to be rebuilt.
                 last_out = self.make(build_dir)
-                self.assertEqual(NO_REBUILD_OUT, last_out)
+                self.assertEqual(_out['no_rebuild'], last_out)
         finally:
             os.chdir(original_dir)
 
@@ -183,11 +180,11 @@ class TestBuildDir(TestCase):
 
                 # First make - full project should build.
                 first_out = self.make(build_dir)
-                self.assertEqual(FULL_BUILD_OUT, first_out)
+                self.assertEqual(_out['full_build'], first_out)
                 # Second make with no source changes:
                 # nothing should be rebuilt.
                 second_out = self.make(build_dir)
-                self.assertEqual(NO_REBUILD_OUT, second_out)
+                self.assertEqual(_out['no_rebuild'], second_out)
                 # Change docs and whitespace in header.
                 shutil.copy(
                     ALTERNATE_HELLO_H_PATH.absolute(),
@@ -196,7 +193,7 @@ class TestBuildDir(TestCase):
                 # Since no substantive changes have been made,
                 # no objects should need to be rebuilt.
                 last_out = self.make(build_dir)
-                self.assertEqual(NO_REBUILD_OUT, last_out)
+                self.assertEqual(_out['no_rebuild'], last_out)
         finally:
             os.chdir(original_dir)
 
@@ -208,7 +205,7 @@ class TestBuildDir(TestCase):
 
                 # First make - full project should build.
                 first_out = self.make(build_dir)
-                self.assertEqual(FULL_BUILD_OUT, first_out)
+                self.assertEqual(_out['full_build'], first_out)
 
                 # Change function definition in hello.cc.
                 shutil.copy(
@@ -219,7 +216,7 @@ class TestBuildDir(TestCase):
                 # Since no substantive changes have been made,
                 # no objects should need to be rebuilt.
                 last_out = self.make(build_dir)
-                self.assertEqual(HELLO_REBUILD_OUT, last_out)
+                self.assertEqual(_out['hello_rebuild'], last_out)
         finally:
             os.chdir(original_dir)
 
@@ -231,12 +228,12 @@ class TestBuildDir(TestCase):
 
                 # First make - full project should build.
                 first_build_out = self.make(build_dir)
-                self.assertEqual(FULL_BUILD_OUT, first_build_out)
+                self.assertEqual(_out['full_build'], first_build_out)
 
                 # Check output of program
                 call_path = str(Path(build_dir, 'sample_target'))
                 first_program_out = sub.check_output([call_path])
-                self.assertEqual(EXPECTED_OUT_1, first_program_out)
+                self.assertEqual(_out['expected1'], first_program_out)
 
                 # Change function definition in hello.cc.
                 shutil.copy(
@@ -253,44 +250,115 @@ class TestBuildDir(TestCase):
                     str(Path(project_dir, 'hello', 'hello.cc'))
                 )
                 fixed_build_out = self.make(build_dir)
-                self.assertEqual(HELLO_REBUILD_OUT, fixed_build_out)
+                self.assertEqual(_out['hello_rebuild'], fixed_build_out)
 
                 # Re run program and check output.
                 fixed_program_out = sub.check_output([call_path])
-                self.assertEqual(EXPECTED_OUT_2, fixed_program_out)
+                self.assertEqual(_out['expected2'], fixed_program_out)
 
         finally:
             os.chdir(original_dir)
 
-    def test_change_in_unused_member_function_does_not_cause_rebuild(self):
+    def get_output_from_change(
+            self,
+            change_source: ty.Callable[[str], None],
+            after_setup: ty.Callable[[str], None] = None,
+    ) -> ty.Tuple[bytes, bytes, bytes]:
         original_dir = os.curdir
         try:
             with tempfile.TemporaryDirectory() as temp_dir:
                 project_dir, build_dir = self.set_up_project_dir(temp_dir)
                 # Add original red herring class.
-                shutil.copy(
-                    Path(TEST_RESOURCES_PATH, 'herring_sample1.h'),
-                    Path(project_dir, 'sample.h')
-                )
+                if after_setup:
+                    after_setup(project_dir)
 
                 # First make - full project should build.
                 first_out = self.make(build_dir)
-                self.assertEqual(FULL_BUILD_OUT, first_out)
                 # Second make with no source changes:
                 # nothing should be rebuilt.
                 second_out = self.make(build_dir)
-                self.assertEqual(NO_REBUILD_OUT, second_out)
-                # Change red herring class.
-                shutil.copy(
-                    Path(TEST_RESOURCES_PATH, 'herring_sample2.h'),
-                    Path(project_dir, 'sample.h')
-                )
+                # Run change
+                change_source(project_dir)
                 # Since no substantive changes have been made,
                 # no objects should need to be rebuilt.
                 last_out = self.make(build_dir)
-                self.assertEqual(NO_REBUILD_OUT, last_out)
         finally:
             os.chdir(original_dir)
+        return first_out, second_out, last_out
+
+    def test_change_in_unused_member_function_does_not_cause_rebuild(self):
+        first_out, second_out, last_out = self.get_output_from_change(
+            # Add original red herring class.
+            after_setup=lambda project_dir: shutil.copy(
+                Path(TEST_RESOURCES_PATH, 'herring_sample1a.h'),
+                Path(project_dir, 'sample.h')
+            ),
+            # Change red herring class.
+            # Since no substantive changes have been made,
+            # no objects should need to be rebuilt.
+            change_source=lambda project_dir: shutil.copy(
+                Path(TEST_RESOURCES_PATH, 'herring_sample1b.h'),
+                Path(project_dir, 'sample.h')
+            )
+        )
+        self.assertEqual(_out['full_build'], first_out)
+        self.assertEqual(_out['no_rebuild'], second_out)
+        self.assertEqual(_out['no_rebuild'], last_out)
+
+    def test_change_in_unused_function_does_not_cause_rebuild(self):
+        first_out, second_out, last_out = self.get_output_from_change(
+            # Add original red herring class.
+            after_setup=lambda project_dir: shutil.copy(
+                Path(TEST_RESOURCES_PATH, 'herring_sample2a.h'),
+                Path(project_dir, 'sample.h')
+            ),
+            # Change red herring class.
+            # Since no substantive changes have been made,
+            # no objects should need to be rebuilt.
+            change_source=lambda project_dir: shutil.copy(
+                Path(TEST_RESOURCES_PATH, 'herring_sample2b.h'),
+                Path(project_dir, 'sample.h')
+            )
+        )
+        self.assertEqual(_out['full_build'], first_out)
+        self.assertEqual(_out['no_rebuild'], second_out)
+        self.assertEqual(_out['no_rebuild'], last_out)
+
+    def test_added_function_definition_does_not_cause_rebuild(self):
+        first_out, second_out, last_out = self.get_output_from_change(
+            # Add definition
+            change_source=lambda project_dir: shutil.copy(
+                Path(TEST_RESOURCES_PATH, 'herring_sample3.h'),
+                Path(project_dir, 'sample.h')
+            )
+        )
+        self.assertEqual(_out['full_build'], first_out)
+        self.assertEqual(_out['no_rebuild'], second_out)
+        self.assertEqual(_out['no_rebuild'], last_out)
+
+    def test_added_function_declaration_does_not_cause_rebuild(self):
+        first_out, second_out, last_out = self.get_output_from_change(
+            # Add definition
+            change_source=lambda project_dir: shutil.copy(
+                Path(TEST_RESOURCES_PATH, 'herring_sample4.h'),
+                Path(project_dir, 'sample.h')
+            )
+        )
+        self.assertEqual(_out['full_build'], first_out)
+        self.assertEqual(_out['no_rebuild'], second_out)
+        self.assertEqual(_out['no_rebuild'], last_out)
+
+    def test_changed_class_declaration_causes_rebuild(self):
+        first_out, second_out, last_out = self.get_output_from_change(
+            # Add definition
+            change_source=lambda project_dir: shutil.copy(
+                Path(TEST_RESOURCES_PATH, 'changed_sample.h'),
+                Path(project_dir, 'sample.h')
+            )
+        )
+        self.assertEqual(_out['full_build'], first_out)
+        self.assertEqual(_out['no_rebuild'], second_out)
+        self.assertEqual(_out['sample_rebuild'], last_out)
 
 
 class TestTarget(TestCase):
@@ -745,6 +813,15 @@ class TestChunk(TestCase):
         self.assertNotEqual(hash_a, hash_b)
 
 
+class TestCppClassForwardDeclaration(TestCase):
+    def test_name_is_correct(self):
+        content = zen.SourceContent(
+            '\n\nclass __some_attr Foo;'
+        )
+        declaration = zen.CppClassForwardDeclaration(content.component.chunk)
+        self.assertEqual('Foo', declaration.name)
+
+
 class TestCppClassDefinition(TestCase):
     def get_class_def(self) -> zen.CppClassDefinition:
         with Path(CODE_SAMPLES_PATH, 'sample_class').open() as src_f:
@@ -800,7 +877,56 @@ class TestCppClassDefinition(TestCase):
 
 
 class TestFunctionDeclaration(TestCase):
-    pass
+    def test_declaration_has_no_external_content(self):
+        """
+        Since function declarations cannot change the operation of a
+        program without being used, function declarations should have
+        no exposed content.
+
+        The code of the function declaration matters only if the
+        function is used.
+        """
+        content = zen.SourceContent(
+            '\n\nstd::string RedHerring();\n'
+        )
+        definition = zen.FunctionDeclaration(content.component.chunk)
+        self.assertEqual([], definition.exposed_content)
+
+
+class TestFunctionDefinition(TestCase):
+    def test_tokens_are_correct(self):
+        content = zen.SourceContent(
+            '\n\ninline std::string RedHerring() { return "Hello"; }\n'
+        )
+        definition = zen.FunctionDefinition(content.component.chunk)
+        self.assertEqual(
+            ['inline', 'std', 'string', 'RedHerring'],
+            definition.tokens
+        )
+
+    def test_annotations_are_found(self):
+        content = zen.SourceContent(
+            'void Sample() const {\n'
+            '   // ZEN(note1)'
+            '   foo();  // ZEN(note2)'
+        )
+        definition = zen.FunctionDefinition(content.component.chunk)
+        self.assertEqual({'note1': True}, definition.annotations)
+
+    def test_definition_has_no_external_content(self):
+        """
+        Since function definitions cannot change the operation of a
+        program without being used, function declarations should have
+        no exposed content.
+
+        The code of the function declaration matters only if the
+        function is used.
+        """
+        content = zen.SourceContent(
+            '\n\ninline std::string RedHerring() { return "Hello"; }\n'
+        )
+        declaration = zen.FunctionDefinition(content.component.chunk)
+        self.assertEqual([], declaration.exposed_content)
 
 
 class TestMemberFunctionDeclaration(TestCase):
@@ -810,7 +936,7 @@ class TestMemberFunctionDeclaration(TestCase):
         self.assertEqual(1, len(declaration.construct_content))
         self.assertIn('Print', declaration.construct_content)
 
-    def test_whole_declaration_is_in_external_content(self):
+    def test_whole_declaration_is_in_exposed_content(self):
         s = 'void Print() const;'
         content = zen.SourceContent(s)
         declaration = zen.MemberFunctionDeclaration(content.component.chunk)

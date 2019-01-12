@@ -1379,7 +1379,7 @@ class Component:
                     component = MiscStatement(component_chunk)
                 else:
                     if 'class' in s:
-                        component = CppClassDeclaration(component_chunk)
+                        component = CppClassForwardDeclaration(component_chunk)
                     elif 'using' in s:
                         component = UsingStatement.create(
                             component_chunk, scope)
@@ -1478,7 +1478,8 @@ class Component:
         :rtype: Dict[str, Construct]
         """
         return {token: constructs[token] for token in self.tokens
-                if token in constructs}
+                if token in constructs and
+                getattr(self, 'name', None) == token}
 
     @property
     def construct_content(self) -> ty.Dict[str, ty.List['Component']]:
@@ -1528,6 +1529,7 @@ class Block(Component):
     ) -> None:
         super().__init__(file_content, start, end)
         self._sub_components: ty.Optional[ty.List['Component']] = None
+        self._tags: ty.Optional[ty.Set[str]] = None
         self.scope_type = scope_type
 
     @property
@@ -1550,6 +1552,17 @@ class Block(Component):
                     self._sub_components.append(component)
                     pos = component.chunk.end
         return self._sub_components
+
+    @property
+    def tags(self) -> ty.Set[str]:
+        if self._tags is None:
+            start_line = self.chunk.start.line_i
+            end_line = self.chunk.end.line_i
+            for line_i in range(start_line, end_line):
+                # Only adopt tags from lines without some other statement
+                pass  # TODO
+
+        return self._tags
 
     def __repr__(self) -> str:
         return f'Block[{self.chunk.bounds_description}]'
@@ -1658,6 +1671,16 @@ class FunctionDeclaration(Component):
     def construct_content(self) -> ty.Dict[str, ty.List['Component']]:
         return {self.name: [self]}
 
+    @property
+    def exposed_content(self) -> ty.List['Chunk']:
+        """
+        Since function definitions cannot change the operation of a
+        program without being used, function declarations have
+        no exposed content.
+        :return: Empty list.
+        """
+        return []
+
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}[{self.name}]'
 
@@ -1674,11 +1697,21 @@ class MemberFunctionDeclaration(FunctionDeclaration):
     declared, and so the effect should be the same.
     """
 
+    exposed_content = Component.exposed_content
 
-class CppClassDeclaration(Component):
+
+class CppClassForwardDeclaration(Component):
     """
     Component containing the declaration of a C++ class.
     """
+    def __init__(
+            self,
+            file_content: ty.Union['SourceContent', 'Chunk'],
+            start: 'SourcePos' = None,
+            end: ty.Optional['SourcePos'] = None
+    ) -> None:
+        super().__init__(file_content, start, end)
+        self.name = self.chunk.tokenize()[-1]
 
 
 class FunctionDefinition(Component):
@@ -1722,6 +1755,10 @@ class FunctionDefinition(Component):
         :rtype: List['Chunk']
         """
         return []
+
+    @property
+    def tokens(self) -> ty.List['str']:
+        return self.prefix.tokenize()
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}[{self.name}]'
@@ -1928,6 +1965,7 @@ class Construct:
         self.name = name
         self.used = False
         self.content: ty.List['Component'] = []
+        self.tags: ty.Set[str] = set()
 
     def add_content(self, content: ty.List['Component']) -> None:
         """
@@ -1936,6 +1974,9 @@ class Construct:
         :rtype: None
         """
         self.content += content
+
+    def add_tags(self, tags: ty.Set[str]) -> None:
+        self.tags |= tags
 
     def __repr__(self) -> str:
         return f'Construct[{self.name}, used={self.used}]'

@@ -53,9 +53,6 @@ These include:
 ## Todo:
  * Test + ensure correct operation of shallow mode
  * Implement deep mode
-    * for each source/header file:
-        * find class + function scopes w/ names
-    * for each compilation unit:
-       *  find used scopes:
-           *  for each included source/header:
-               *  find class / function scopes used
+    * Run block use analysis on header files only.
+    * Consider operator overload functions to be used whenever their
+        class is, since they are called without their name being used.
