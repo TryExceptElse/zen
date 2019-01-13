@@ -875,6 +875,18 @@ class TestCppClassDefinition(TestCase):
         self.assertEqual(1, len(definition.exposed_content))
         self.assertEqual('class Foo', str(definition.exposed_content[0]))
 
+    def test_used_constructs(self):
+        sample_constructs = {
+            'std': zen.Construct('foo_1'),
+            'vector': zen.Construct('foo_2'),
+            'Foo': zen.Construct('stuff'),
+            'Fizz': zen.Construct('should be unused1'),
+            'Buzz': zen.Construct('should be unused2'),
+        }
+        definition = self.get_class_def()
+        used_constructs = definition.used_constructs(sample_constructs)
+        self.assertEqual({'std', 'vector'}, set(used_constructs.keys()))
+
 
 class TestFunctionDeclaration(TestCase):
     def test_declaration_has_no_external_content(self):
@@ -904,14 +916,14 @@ class TestFunctionDefinition(TestCase):
             definition.tokens
         )
 
-    def test_annotations_are_found(self):
+    def test_tags_are_found(self):
         content = zen.SourceContent(
             'void Sample() const {\n'
             '   // ZEN(note1)'
             '   foo();  // ZEN(note2)'
         )
         definition = zen.FunctionDefinition(content.component.chunk)
-        self.assertEqual({'note1': True}, definition.annotations)
+        self.assertEqual({'note1'}, definition.tags)
 
     def test_definition_has_no_external_content(self):
         """
@@ -919,14 +931,32 @@ class TestFunctionDefinition(TestCase):
         program without being used, function declarations should have
         no exposed content.
 
-        The code of the function declaration matters only if the
+        The code of the function definition matters only if the
         function is used.
         """
         content = zen.SourceContent(
             '\n\ninline std::string RedHerring() { return "Hello"; }\n'
         )
-        declaration = zen.FunctionDefinition(content.component.chunk)
-        self.assertEqual([], declaration.exposed_content)
+        definition = zen.FunctionDefinition(content.component.chunk)
+        self.assertEqual([], definition.exposed_content)
+
+    def test_used_constructs(self):
+        constructs = {
+            'Foo': zen.Construct('sample_class'),
+            'Print': zen.Construct('member_function'),
+            'hello': zen.Construct('function'),
+            'unused_name': zen.Construct('unused_construct')
+        }
+        content = zen.SourceContent(
+            """int main() {
+                sample::Foo foo(std::vector<int>{1, 2, 3});
+                foo.Print();
+                hello();
+            }"""
+        )
+        definition = zen.FunctionDefinition(content.component.chunk)
+        used_names = set(definition.used_constructs(constructs).keys())
+        self.assertEqual({'Foo', 'Print', 'hello'}, used_names)
 
 
 class TestMemberFunctionDeclaration(TestCase):
@@ -1000,6 +1030,15 @@ class TestNamespace(TestCase):
         namespace = zen.NamespaceComponent(content.component.chunk)
         self.assertEqual(1, len(namespace.exposed_content))
         self.assertEqual('namespace ns', str(namespace.exposed_content[0]))
+
+    def test_tokens(self):
+        content = zen.SourceContent(
+            'namespace ns{ \n'
+            'void foo() { std::cout << "hi"; }\n'
+            '}  // namespace ns\n'
+        )
+        namespace = zen.NamespaceComponent(content.component.chunk)
+        self.assertEqual(['namespace', 'ns'], namespace.tokens)
 
 
 class TestMiscComponent(TestCase):

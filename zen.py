@@ -467,7 +467,7 @@ class CompileObject:
                 """
                 yield component
                 for sub_component in component.sub_components:
-                    yield sub_component
+                    yield from recurse_component(sub_component)
                 for construct in component.used_constructs(
                         constructs).values():
                     if construct.used:
@@ -1463,8 +1463,7 @@ class Component:
     @property
     def tokens(self) -> ty.List[str]:
         if self._tokens is None:
-            self._tokens = self.chunk.tokenize()
-        assert isinstance(self._tokens, list)
+            self._tokens = self._find_tokens()
         return self._tokens
 
     def used_constructs(
@@ -1479,7 +1478,7 @@ class Component:
         """
         return {token: constructs[token] for token in self.tokens
                 if token in constructs and
-                getattr(self, 'name', None) == token}
+                getattr(self, 'name', None) != token}
 
     @property
     def construct_content(self) -> ty.Dict[str, ty.List['Component']]:
@@ -1512,6 +1511,9 @@ class Component:
         :rtype: Collection[Component]
         """
         return []
+
+    def _find_tokens(self) -> ty.List[str]:
+        return self.chunk.tokenize()
 
 
 class Block(Component):
@@ -1593,6 +1595,9 @@ class NamespaceComponent(Component):
     @property
     def exposed_content(self) -> ty.List['Chunk']:
         return [self.prefix.strip()]
+
+    def _find_tokens(self) -> ty.List[str]:
+        return self.prefix.tokenize()
 
 
 class PreprocessorComponent(Component):
@@ -1734,6 +1739,15 @@ class FunctionDefinition(Component):
         block_start = find_in_scope('{', self.chunk)
         return Block(self.chunk[block_start:], scope_type=ScopeType.FUNC)
 
+    def used_constructs(
+            self,
+            constructs: ty.Dict[str, 'Construct']
+    ) -> ty.Dict[str, 'Construct']:
+        used: ty.Dict[str, 'Construct'] = super().used_constructs(constructs)
+        for component in self.inner_block.sub_components:
+            used.update(component.used_constructs(constructs))
+        return used
+
     @property
     def construct_content(self) -> ty.Dict[str, ty.List['Component']]:
         # noinspection PyTypeChecker
@@ -1756,8 +1770,7 @@ class FunctionDefinition(Component):
         """
         return []
 
-    @property
-    def tokens(self) -> ty.List['str']:
+    def _find_tokens(self) -> ty.List[str]:
         return self.prefix.tokenize()
 
     def __repr__(self) -> str:
@@ -1798,6 +1811,15 @@ class CppClassDefinition(Component):
         prefix_tokens = scope_tokens(self.prefix)
         return prefix_tokens[prefix_tokens.index('class') + 1]
 
+    def used_constructs(
+            self,
+            constructs: ty.Dict[str, 'Construct']
+    ) -> ty.Dict[str, 'Construct']:
+        used: ty.Dict[str, 'Construct'] = super().used_constructs(constructs)
+        for component in self.member_components:
+            used.update(component.used_constructs(constructs))
+        return used
+
     @property
     def construct_content(self) -> ty.Dict[str, ty.List['Component']]:
         own_content = self.inner_block.sub_components
@@ -1814,8 +1836,7 @@ class CppClassDefinition(Component):
     def member_components(self) -> ty.List['Component']:
         return self.inner_block.sub_components
 
-    @property
-    def tokens(self) -> ty.List['str']:
+    def _find_tokens(self) -> ty.List[str]:
         return self.prefix.tokenize()
 
     def __repr__(self) -> str:
@@ -1855,8 +1876,7 @@ class ControlBlock(Component):
     def exposed_content(self) -> ty.List['Chunk']:
         return [self.prefix.strip()]
 
-    @property
-    def tokens(self) -> ty.List['str']:
+    def _find_tokens(self) -> ty.List[str]:
         return self.prefix.tokenize()
 
 
@@ -1892,14 +1912,12 @@ def find_in_scope(sub_str: str, chunk: 'Chunk') -> 'SourcePos':
         if s.endswith(sub_str):
             return pos - len(sub_str)
         c = chunk[pos]
+        if (c in BRACKETS or c in '\'"') and (s + c).endswith(sub_str):
+            return pos - (len(sub_str) - 1)
         if c in BRACKETS:
-            if (s + c).endswith(sub_str):
-                return pos - (len(sub_str) - 1)
             pos = chunk.find_pair(pos)
             s = BRACKETS[c]
         elif c in '\'"':
-            if (s + c).endswith(sub_str):
-                return pos - (len(sub_str) - 1)
             pos = chunk.find_quote_end(pos)
             s = c
         else:
