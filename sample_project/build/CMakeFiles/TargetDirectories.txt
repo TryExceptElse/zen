@@ -1,6 +1,0 @@
-/home/user0/PycharmProjects/zen/sample_project/build/CMakeFiles/rebuild_cache.dir
-/home/user0/PycharmProjects/zen/sample_project/build/CMakeFiles/edit_cache.dir
-/home/user0/PycharmProjects/zen/sample_project/build/CMakeFiles/sample_target.dir
-/home/user0/PycharmProjects/zen/sample_project/build/hello/CMakeFiles/rebuild_cache.dir
-/home/user0/PycharmProjects/zen/sample_project/build/hello/CMakeFiles/edit_cache.dir
-/home/user0/PycharmProjects/zen/sample_project/build/hello/CMakeFiles/hello.dir

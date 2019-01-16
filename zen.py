@@ -1,6 +1,7 @@
 """
 Zen: Reducing recompilation times.
 """
+
 import argparse
 import enum
 import hashlib
@@ -29,6 +30,9 @@ class ComponentCreationError(ValueError):
 
 
 class Status(enum.IntEnum):
+    """
+    Change status of a SourceFile, CompileObject, or Target.
+    """
     UNCHECKED = 1
     NO_CHANGE = 2
     MINOR_CHANGE = 3
@@ -71,6 +75,7 @@ class BuildDir:
             for target in self.targets.values()
         }
         self.sources = self._find_sources()
+        self._hash_cache: ty.Dict[str, int] = None
 
     def meditate(self) -> None:
         """
@@ -81,7 +86,18 @@ class BuildDir:
         [target.meditate() for target in self.targets.values()]
 
     def remember(self) -> None:
-        [self.get_cache(dep).cache(dep) for dep in self.sources]
+        """
+        Stores information about the current form of the source code,
+        so that it may later be determined later what has been changed
+        substantially enough to require recompilation.
+        :return: None
+        """
+        for dep in self.sources:
+            dep.remember(self.hash_cache)
+        for target in self.targets.values():
+            target.remember()
+        with self.cache_path.open('w') as f:
+            json.dump(self.hash_cache, f)
 
     def _find_targets(self) -> ty.Dict[str, 'Target']:
         """
@@ -104,15 +120,19 @@ class BuildDir:
                     dependencies.add(dependency)
         return dependencies
 
-    def get_cache(self, src: 'SourceFile') -> 'SourceCache':
+    @property
+    def hash_cache(self) -> ty.Dict[str, int]:
         """
         Gets SourceCache storing previously compiled values.
-        :param src: SourceFile
-        :return: SourceCache
+        :return: Cache dict.
         """
-        if not self.cache_path.exists():
-            self.cache_path.mkdir()
-        return SourceCache(Path(self.cache_path, src.hex))
+        if self._hash_cache is None:
+            try:
+                with self.cache_path.open() as f:
+                    self._hash_cache = json.load(f)
+            except FileNotFoundError:
+                self._hash_cache = {}
+        return self._hash_cache
 
     @property
     def cache_path(self) -> Path:
@@ -178,18 +198,21 @@ class Target:
                 self.type != TargetType.UNKNOWN:
             self.avoid_build()
 
+    def remember(self) -> None:
+        for obj in self.objects:
+            obj.remember()
+
     def avoid_build(self) -> None:
         """
         Un-Marks this target for re-linking.
         This method should only be called if target is known.
         :return: None
         """
-        sub.call(['touch', '-c', str(self.file_path.absolute())])
+        sub.run(['touch', '-c', str(self.file_path.absolute())], check=True)
 
     @staticmethod
-    def type_from_path(path: str) -> TargetType:
+    def type_from_path(path: ty.Union[str, Path]) -> TargetType:
         ext = os.path.splitext(path)[1]
-        # noinspection PyTypeChecker
         return {
             '': TargetType.EXECUTABLE,
             '.a': TargetType.STATIC_LIB,
@@ -204,26 +227,19 @@ class Target:
         depend_internal_path = Path(self.path, 'depend.internal')
         if not depend_internal_path.exists():
             return []
-        objects = []
         with depend_internal_path.open() as f:
-            object_path: ty.Optional[Path] = None
-            dependencies: ty.Set[Path] = []
+            d: ty.Dict[Path, ty.List[Path]] = {}
+            deps: ty.List[Path] = []
             for line in f.readlines():
-                line = line.rstrip()
-                # Check if line indicates object dependency.
-                if object_path and line and line.startswith(' '):
-                    dependencies.append(Path(line.strip()))
-                # Check if object description has ended.
-                if object_path and line.endswith('.o'):
-                    objects.append(CompileObject(
-                        object_path, dependencies, self.build_dir))
-                    dependencies = []
-                # If a new object description has begun, set object.
-                if line.endswith('.o'):
-                    object_path = Path(self.build_dir.path, line.strip())
-            objects.append(CompileObject(
-                object_path, dependencies, self.build_dir))
-        return objects
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                if stripped.endswith('.o'):
+                    deps = d[Path(self.build_dir.path, stripped)] = []
+                elif line.startswith(' '):
+                    deps.append(Path(self.build_dir.path, stripped).resolve())
+        return [CompileObject(o, deps, self.build_dir) for
+                o, deps in d.items()]
 
     def _identify_target(self) -> ty.Tuple[ty.Optional[Path], 'TargetType']:
         """
@@ -240,7 +256,6 @@ class Target:
         start_key = 'file(REMOVE_RECURSE'
         start = s.find(start_key)
         if start == -1:
-            # noinspection PyTypeChecker
             return None, TargetType.UNKNOWN
         start += len(start_key)
         end = s.find('\n)\n', start)
@@ -259,7 +274,6 @@ class Target:
             path = None
         else:
             path = Path(self.path, '..', '..', target_name).resolve()
-        # noinspection PyTypeChecker
         return path, target_type
 
     def _find_dependencies(self) -> ty.Set[Path]:
@@ -283,6 +297,14 @@ class Target:
 
     @property
     def other_status(self) -> Status:
+        """
+        Gets status of other files that the target relies upon, such as
+        make files. Since these files are not parsed, their status will
+        only ever be NO_CHANGE or CHANGED.
+
+        :return: Status.NO_CHANGE or Status.CHANGED
+        :rtype Status
+        """
         if any(os.path.getmtime(other) > self.m_time for
                other in self.other_dependencies):
             return Status.CHANGED
@@ -290,6 +312,11 @@ class Target:
 
     @property
     def lib_dependencies(self) -> ty.Set['Target']:
+        """
+        Finds library Targets that this Target relies upon.
+        :return: Library Targets.
+        :rtype Set[Target]
+        """
         libraries = set()
         for dep in self.dependency_paths:
             if self.type_from_path(dep.absolute()) not in LIB_TYPES:
@@ -313,7 +340,7 @@ class Target:
         for dep in self.dependency_paths:
             if self.type_from_path(dep.absolute()) in LIB_TYPES:
                 continue
-            if os.path.splitext(dep)[1] == '.o':
+            if os.path.splitext(str(dep))[1] == '.o':
                 continue
             others.add(dep)
         return others
@@ -344,7 +371,7 @@ class CompileObject:
         self.sources = [SourceFile(src) for src in sources]
         self.build_dir = build_dir
         self.status = Status.UNCHECKED
-        self.non_source_change = False  # Set if build file, etc, changes.
+        self._used_content_hash: ty.Optional[int] = None
 
     def meditate(self) -> None:
         """
@@ -357,27 +384,48 @@ class CompileObject:
         else:
             self.status = Status.NO_CHANGE
             return
-        substantive_changes = False
-        for dep in self.sources:
-            try:
-                cache = self.build_dir.get_cache(dep)
-            except KeyError:
-                self.status = Status.CHANGED
-                return
-            if dep.substantive_changes(cache):
-                substantive_changes = True
-                self.status = Status.CHANGED
-                break
-        if not substantive_changes:
+
+        if self._has_code_changes() and self._has_used_content_change():
+            self.status = Status.CHANGED
+        else:
             self.status = Status.MINOR_CHANGE
             self.avoid_build()
+
+    def remember(self) -> None:
+        """
+        Remembers used parts of sources, so that differences can be
+        found the next time zen is run.
+        :return: None
+        """
+        self.build_dir.hash_cache[self.hex] = self.used_content_hash
+
+    def _has_code_changes(self) -> bool:
+        """
+        Checks whether any source file dependencies have had changes,
+        not including whitespace or comments.
+        :return: True if code changes are found in any source file.
+        :rtype: bool
+        """
+        for source in self.sources:
+            if source.substantive_changes(self.build_dir.hash_cache):
+                return True
+        return False
+
+    def _has_used_content_change(self):
+        """
+        Checks whether used content has changed.
+        :return: True if used content has changed.
+        :rtype: bool
+        """
+        cached_hash = self.build_dir.hash_cache[self.hex]
+        return self.used_content_hash != cached_hash
 
     def avoid_build(self) -> None:
         """
         Un-Marks this object for re-compilation.
         :return: None
         """
-        sub.call(['touch', '-c', str(self.path.absolute())])
+        sub.run(['touch', '-c', str(self.path.absolute())], check=True)
 
     @property
     def m_time(self):
@@ -400,8 +448,83 @@ class CompileObject:
             return True
         return any([own_m_time <= dep.m_time for dep in self.sources])
 
+    @property
+    def used_content_hash(self) -> int:
+        if self._used_content_hash is None:
+            constructs: ty.Dict[str, 'Construct'] = self.create_constructs()
+
+            def recurse_component(
+                    component: 'Component'
+            ) -> ty.Iterable['Component']:
+                """
+                Yields components recursively from passed component,
+                yielding first the component itself, and then any sub-
+                components it possesses, sub-components of those
+                sub-components, etc.
+
+                :param component: Component to recurse over.
+                :return: Component generator
+                """
+                yield component
+                for sub_component in component.sub_components:
+                    yield from recurse_component(sub_component)
+                for construct in component.used_constructs(
+                        constructs).values():
+                    if construct.used:
+                        continue
+                    construct.used = True
+                    for component in construct.content:
+                        yield from recurse_component(component)
+
+            def used_components() -> ty.Iterable['Component']:
+                for source in self.sources:
+                    content = source.content
+                    block = content.component
+                    for component in block.sub_components:
+                        yield from recurse_component(component)
+
+            def used_chunk_strings() -> ty.Iterable[str]:
+                for component in used_components():
+                    for chunk in component.exposed_content:
+                        yield str(chunk).strip()
+
+            self._used_content_hash = iter_hash(used_chunk_strings())
+        return self._used_content_hash
+
+    def create_constructs(self) -> ty.Dict[str, 'Construct']:
+        """
+        Gets constructs produced by sources used by CompileObject.
+        :return: dict of constructs by name str.
+        :rtype Dict[str, Construct]
+        """
+        def recurse_component(component_: 'Component'):
+            yield component_
+            for sub_component in component_.sub_components:
+                yield from recurse_component(sub_component)
+
+        constructs: ty.Dict[str, 'Construct'] = {}
+        for source in self.sources:
+            for component in recurse_component(source.content.component):
+                for name, content in component.construct_content.items():
+                    try:
+                        construct = constructs[name]
+                    except KeyError:
+                        construct = constructs[name] = Construct(name)
+                    construct.add_content(content)
+        return constructs
+
+    @property
+    def hex(self) -> str:
+        """
+        Gets the hash of the compile object's path.
+        :return: hex version of the hash code produced from the
+                    object's path.
+        :rtype: str
+        """
+        return hashlib.md5(str(self.path).encode()).hexdigest()
+
     def __repr__(self) -> str:
-        return f'Object[{os.path.basename(self.path)}]'
+        return f'Object[{os.path.basename(str(self.path))}]'
 
 
 class SourceFile:
@@ -434,15 +557,20 @@ class SourceFile:
     def clear(cls) -> None:
         cls._source_files.clear()
 
-    def substantive_changes(self, cache: 'SourceCache') -> bool:
+    def substantive_changes(self, cache: ty.Dict[str, int]) -> bool:
         """
         Check for changes against cache.
 
         :param cache: SourceCache
         :return: bool which is True if changes have occurred.
         """
-        if self.stripped_hash != cache.stripped_hash:
+        try:
+            return self.stripped_hash != cache[self.hex]
+        except KeyError:
             return True
+
+    def remember(self, cache: ty.Dict[str, int]) -> None:
+        cache[self.hex] = self.stripped_hash
 
     @property
     def m_time(self) -> float:
@@ -454,11 +582,17 @@ class SourceFile:
 
     @property
     def content(self) -> 'SourceContent':
+        """
+        Gets SourceContent object for accessing information about the
+        code contained within the SourceFile.
+        :return: SourceContent instance representing
+                    SourceFile's content.
+        :rtype: SourceContent
+        """
         if self._content is None or self.m_time > self._access_time:
             self._access_time = time.time()
             with self.path.open() as f:
                 self._content = SourceContent(f)
-        # noinspection PyTypeChecker
         return self._content
 
     @property
@@ -474,60 +608,7 @@ class SourceFile:
         return hashlib.md5(str(self.path).encode()).hexdigest()
 
     def __repr__(self) -> str:
-        return f'SourceFile[{os.path.basename(self.path)}]'
-
-
-class SourceCache:
-    """
-    Handles access of previously cached source file information.
-    """
-    STRIPPED_HASH_K = 'stripped_hash'
-
-    def __init__(self, path: Path) -> None:
-        self.path = path
-        self._access_time: ty.Optional[float] = 0
-        self._accessed_d: ty.Optional[ty.Dict[str, ty.Any]] = None
-
-    def cache(self, source: 'SourceFile') -> None:
-        """
-        Updates cached data from passed source.
-        :param source: SourceFile
-        :return: None
-        """
-        d = {
-            self.STRIPPED_HASH_K: source.stripped_hash
-        }
-        with self.path.open('w') as f:
-            json.dump(d, f)
-
-    @property
-    def exists(self) -> bool:
-        return self.path.exists()
-
-    @property
-    def m_time(self) -> float:
-        """
-        Gets modification time of source file.
-        :return: float time in seconds since epoch.
-        """
-        return os.path.getmtime(self.path.absolute())
-
-    @property
-    def _d(self) -> ty.Dict[str, ty.Any]:
-        if self._accessed_d is None or self._access_time < self.m_time:
-            self._access_time = time.time()
-            with self.path.open() as f:
-                self._accessed_d = json.load(f)
-        # noinspection PyTypeChecker
-        return self._accessed_d
-
-    @property
-    def stripped_hash(self) -> int:
-        """
-        Gets hash of the cached source file's raw content.
-        :rtype: int
-        """
-        return self._d[self.STRIPPED_HASH_K]
+        return f'SourceFile[{os.path.basename(str(self.path))}]'
 
 
 #######################################################################
@@ -617,14 +698,15 @@ class SourceContent:
 
     @property
     def component(self) -> 'Block':
+        """
+        Gets Component containing entirety of the source's content.
+        :return: Block Component
+        :rtype: Block
+        """
         if self._component is None:
             self._component = Block(self)
         assert isinstance(self._component, Block)
         return self._component
-
-    @property
-    def used_constructs(self) -> ty.Dict[str, 'Construct']:
-        return self.component.used_constructs
 
     @staticmethod
     def _lines_from_str(content: str) -> ty.List['Line']:
@@ -640,10 +722,6 @@ class Line:
     """
     Data storage class for storing information about a line of source.
     """
-    i: int
-    raw: str
-    stripped: str
-    uncommented: str
 
     def __init__(self, i: int, s: str) -> None:
         self.index = i
@@ -699,7 +777,7 @@ class Line:
 
     def __repr__(self) -> str:
         preview_len = 40
-        # Produces Line[i: index, s: preview + ... if preview runs over]
+        # Produces Line[i: index, s: preview + '...' if preview runs over]
         return f'Line[i: {self.index}, ' \
                f'\'{self.raw[:preview_len]}' \
                f'{"..." if len(self.raw) > preview_len else ""}\']'
@@ -737,10 +815,12 @@ class SourcePos:
         self.col_i = col_i
 
     def __add__(self, n: int) -> 'SourcePos':
+        if n < 0:
+            return self - abs(n)
         original_n = n
         line = self.file_content.lines[self.line_i]
         remaining_chars = len(line.s(self.form)) - self.col_i
-        if n < remaining_chars:
+        if n <= remaining_chars:
             return SourcePos(
                 self.file_content,
                 self.line_i,
@@ -751,7 +831,7 @@ class SourcePos:
             n -= remaining_chars
         for line in self.file_content.lines[self.line_i + 1:]:
             line_chars = len(line.s(self.form))
-            if n < line_chars:
+            if n <= line_chars:
                 return SourcePos(self.file_content, line.index, n, self.form)
             n -= line_chars
         else:
@@ -760,6 +840,8 @@ class SourcePos:
                 f'{original_n} is too large.')
 
     def __sub__(self, n: int) -> 'SourcePos':
+        if n < 0:
+            return self + abs(n)
         original_n = n
         remaining_chars = self.col_i
         if n <= remaining_chars:
@@ -784,6 +866,20 @@ class SourcePos:
             raise ValueError(
                 f'Cannot subtract {original_n} from {self}. '
                 f'{original_n} is too large.')
+
+    def __hash__(self) -> int:
+        return hash((self.file_content, self.line_i, self.col_i, self.form))
+
+    def __eq__(self, other) -> bool:
+        try:
+            return all((
+                self.file_content == other.file_content,
+                self.line_i == other.line_i,
+                self.col_i == other.col_i,
+                self.form == other.form
+            ))
+        except AttributeError:
+            return False
 
     @property
     def next_line_pos(self) -> 'SourcePos':
@@ -826,8 +922,8 @@ class Chunk:
     def __init__(
             self,
             file_content: 'SourceContent',
-            start: ty.Optional['SourcePosI'] = None,
-            end: ty.Optional['SourcePosI'] = None,
+            start: ty.Optional['SourcePos'] = None,
+            end: ty.Optional['SourcePos'] = None,
             form: 'SourceForm' = SourceForm.STRIPPED
     ) -> None:
         self.file_content = file_content
@@ -854,14 +950,29 @@ class Chunk:
     def __len__(self) -> int:
         return self.index_range.stop
 
-    def __getitem__(self, i: ty.Union[int, 'SourcePos', slice]):
+    def __getitem__(
+            self, i: ty.Union[int, 'SourcePos', slice]
+    ) -> ty.Union[str, 'Chunk']:
+        """
+        Gets character at passed position, or returns a subset Chunk
+        from a slice.
+
+        :param i: index, SourcePos, or slice.
+        :return: char str if index or SourcePos is passed, or Chunk
+                    if slice is passed.
+        :rtype: Union[str, Chunk]
+        """
         if isinstance(i, SourcePos):
             return self._char_at_pos(i)
         if isinstance(i, slice):
             return self._slice(i)
         return self._char_at_index(i)
 
-    def __iter__(self):
+    def __iter__(self) -> ty.Iterable[str]:
+        """
+        Iterate over all characters in Chunk.
+        :return: str iterable yielding each character in Chunk.
+        """
         if self.first_line is self.last_line:
             line_s = self.first_line.s(self.form)
             for c in line_s[self.start.col_i:self.end.col_i]:
@@ -879,6 +990,17 @@ class Chunk:
                 yield c
 
     def pos(self, line_i: int, col_i: ty.Union[str, int] = 0) -> 'SourcePos':
+        """
+        Gets SourcePos representing a position within source.
+
+        :param line_i: int line index in source.
+                    Not relative to start of Chunk.
+        :param col_i: int col index or position keyword ('end')
+                    Not relative to start of Chunk, if on first line.
+        :return: SourcePos for the same source file and form as Chunk,
+                    and with the passed line and column indices.
+        :rtype: SourcePos
+        """
         if isinstance(col_i, str):
             if col_i == 'end':
                 col_i = len(self.file_content.lines[line_i].s(self.form))
@@ -889,11 +1011,17 @@ class Chunk:
     def line(self, pos: 'SourcePos') -> 'Line':
         return self.file_content.lines[pos.line_i]
 
-    def tokenize(self, regex: str = r"[\w0-9]+") -> ty.Set[str]:
-        tokens: ty.Set[str] = set()
+    def tokenize(self, regex: str = r"[\w0-9]+") -> ty.List[str]:
+        tokens: ty.List[str] = []
+        if self.start.line_i == self.end.line_i:
+            return re.findall(regex, str(self))
         for line in self.lines:
-            for token in re.findall(regex, line.s(self.form)):
-                tokens.add(token)
+            s = line.s(self.form)
+            if line == self.lines[0]:
+                s = s[self.start.col_i:]
+            elif line == self.lines[-1]:
+                s = s[:self.end.col_i]
+            tokens += re.findall(regex, s)
         return tokens
 
     def find_pair(self, start_pos: 'SourcePos') -> 'SourcePos':
@@ -912,16 +1040,51 @@ class Chunk:
         depth = 0
         begin_char = self[start_pos]
         end_char = BRACKETS[begin_char]
-        for i, c in enumerate(sub_chunk):
+        pos = sub_chunk.start
+        while True:
+            try:
+                c = sub_chunk[pos]
+            except IndexError:
+                raise ParsingException(
+                    f'No end to bracket at {start_pos} found in {self}.')
             if c == begin_char:
                 depth += 1
             elif c == end_char:
                 depth -= 1
                 if depth == 0:
-                    return start_pos + i
+                    return pos
+            elif c in '\'"':
+                pos = sub_chunk.find_quote_end(pos)
+            pos += 1
+
+    def find_quote_end(self, pos: 'SourcePos') -> 'SourcePos':
+        escaped = False
+        end_char = self[pos]
+        if end_char not in '\'"':
+            raise ValueError(
+                'Expected start of quote to begin with \' or \" character.')
+        for i, c in enumerate(self[pos + 1:]):
+            if escaped:
+                escaped = False
+            elif c == '\\':
+                escaped = True
+            elif c == '\n':
+                raise ValueError('End of line encountered while looking for '
+                                 f'string end for quote char at {pos}')
+            elif c == end_char:
+                return pos + i + 1
+
+    def strip(self) -> 'Chunk':
+        for i, c in enumerate(self):
+            if c not in string.whitespace:
+                start = i
+                break
         else:
-            raise ParsingException(
-                f'No end to bracket at {start_pos} found in {self}.')
+            raise ValueError(f'No non-whitespace content in {self}')
+        end = len(self) - 1
+        while self[end] in string.whitespace:
+            end -= 1
+        return self[start:end + 1]
 
     @property
     def index_range(self) -> range:
@@ -931,7 +1094,8 @@ class Chunk:
             assert isinstance(self.end, SourcePos)
             size_sum = sum(len(line.s(self.form)) for line in self.lines)
             size_sum -= self.start.col_i
-            size_sum -= len(self.lines[self.end.line_i].s(self.form)) - \
+            size_sum -= \
+                len(self.file_content.lines[self.end.line_i].s(self.form)) - \
                 self.end.col_i
             self._index_range = range(size_sum)
         assert isinstance(self._index_range, range)
@@ -943,6 +1107,11 @@ class Chunk:
 
     @property
     def content_hash(self) -> int:
+        """
+        Hashes content of Chunk.
+        :return: hash int
+        :rtype int
+        """
         return iter_hash((s[:-1] if s.endswith('\n') else s)
                          for s in self.line_strings)
 
@@ -963,14 +1132,41 @@ class Chunk:
     def end(self) -> 'SourcePos':
         return self._end
 
+    @property
+    def bounds_description(self) -> str:
+        if self.start.line_i == self.end.line_i:
+            return f'Line {self.start.line_i}, ' \
+                f'Chars {self.start.col_i} to {self.end.col_i}.'
+        else:
+            return f'Line {self.start.line_i} to line {self.end.line_i}'
+
     def _slice(self, chunk_slice: slice):
         if chunk_slice.step:
             raise ValueError('Chunk cannot be sliced using step argument.')
         start = chunk_slice.start or self.start
-        stop = chunk_slice.stop or self.end
+        if chunk_slice.stop is not None:
+            stop = chunk_slice.stop
+        else:
+            stop = self.end
+        if isinstance(start, int):
+            if start < 0:
+                start += len(self)
+            start = self.start + start
+        if isinstance(stop, int):
+            if stop < 0:
+                stop += len(self)
+            stop = self.start + stop
         return Chunk(self.file_content, start, stop)
 
     def _char_at_pos(self, pos: 'SourcePos') -> str:
+        """
+        Gets character at the position identified by the
+        passed SourcePos.
+        :param pos: Position in SourceContent.
+        :return: char str
+        :rtype: str
+        :raises IndexError if SourcePos outside Chunk.
+        """
         if not self.start.line_i <= pos.line_i <= self.end.line_i:
             raise IndexError(
                 f'Line index {pos.line_i} outside chunk lines: '
@@ -986,6 +1182,15 @@ class Chunk:
         return self.file_content.lines[pos.line_i].s(self.form)[pos.col_i]
 
     def _char_at_index(self, i: int) -> str:
+        """
+        Helper method to retrieve character at passed index
+        from Chunk.
+
+        :param i: int index of character to be retrieved.
+        :return: char str.
+        :rtype: str
+        :raises IndexError if index is outside Chunk.
+        """
         if i < 0:
             i += len(self)
         if i not in self.index_range:
@@ -996,11 +1201,14 @@ class Chunk:
         assert isinstance(self.start, SourcePos)
         search_i = 0
         for line in self.lines:
-            if search_i + len(line.s(self.form)) > i:
+            usable_len = len(line.s(self.form))
+            if line == self.first_line:
+                usable_len -= self.start.col_i
+            if search_i + usable_len > i:
                 containing_line = line
                 relative_col = i - search_i
                 break
-            search_i += len(line.s(self.form))
+            search_i += usable_len
         else:
             raise RuntimeError('This should not be reached.')
         if containing_line is self.lines[0]:
@@ -1032,9 +1240,21 @@ class Chunk:
             self.chunk = chunk
 
         def __len__(self) -> int:
+            """
+            Returns number of lines in chunk.
+            :return: number of lines.
+            :rtype int
+            """
             return self.chunk.end.line_i - self.chunk.start.line_i + 1
 
         def __getitem__(self, i: int) -> 'Line':
+            """
+            Gets item with passed index from Chunk Lines.
+            :param i: int index of chunk lines, where 0 is the first
+                        line in the Chunk.
+            :return: Line at passed index
+            :rtype: Line
+            """
             if i < 0:
                 i += len(self)
             if not 0 <= i < len(self):
@@ -1042,8 +1262,11 @@ class Chunk:
                                  f'{len(self)} lines in Chunk.')
             return self.chunk.file_content.lines[i + self.chunk.start.line_i]
 
-        # noinspection PyTypeChecker
         def __iter__(self) -> ty.Iterable['Line']:
+            """
+            Returns generator for iterating over all lines in Chunk.
+            :return: Line generator
+            """
             assert isinstance(self.chunk.start, SourcePos)
             assert isinstance(self.chunk.end, SourcePos)
             end_i = self.chunk.end.line_i
@@ -1053,384 +1276,6 @@ class Chunk:
                 end_i += 1
             for i in range(self.chunk.start.line_i, end_i):
                 yield self.chunk.file_content.lines[i]
-
-
-#######################################################################
-# Source Components
-
-# Define type alias
-SourcePosI = ty.Tuple[ty.Optional[int], ty.Optional[int]]
-
-
-class Component:
-    """
-    Base class for code units
-
-    Component instances represent a specific occurrence of a type,
-    declaration, definition, etc in code.
-
-    Parent to: Preprocessor, Statement, FuncDec, FuncDef, ClassDec,
-        ClassDef, and Block.
-    """
-    def __init__(
-            self,
-            file_content: ty.Union['SourceContent', 'Chunk'],
-            start: SourcePosI = None,
-            end: ty.Optional[SourcePosI] = None
-    ) -> None:
-        """
-        Creates a new component from the passed area of source.
-
-        :param file_content: SourceContent for file that
-                    contains Component.
-        :param start: SourcePos. Indices may be negative.
-        :param end: SourcePos. Indices may be negative.
-        """
-        if isinstance(file_content, Chunk):
-            self.chunk = file_content
-        else:
-            self.chunk = Chunk(file_content, start, end)
-        self._tokens: ty.Optional[ty.Set[str]] = None
-
-    @classmethod
-    def create(cls, chunk: 'Chunk', in_func: bool = False) -> 'Component':
-        """
-        Creates a Component from a passed position in source.
-        :return: Component
-        """
-        # This method should be broken up.
-        s = ''
-        pos = chunk.start
-        component: ty.Optional['Component'] = None
-        while pos != chunk.end:
-            c = chunk[pos]
-            # Check for statement
-            if c == ';':
-                s += c
-                component_chunk = chunk[:pos + 1]
-                if in_func:
-                    component = MiscStatement(component_chunk)
-                else:
-                    if 'class' in s:
-                        component = CppClassDeclaration(component_chunk)
-                    elif 'using' in s:
-                        # noinspection PyTypeChecker
-                        component = UsingStatement.create(
-                            component_chunk, in_func)
-                    elif '()' in s:
-                        component = FunctionDeclaration(component_chunk)
-                break
-            # Check for preprocessor directive
-            elif pos.col_i == 0 and chunk.line(pos).stripped.startswith('#'):
-                component = PreprocessorComponent.create(chunk[pos:])
-                break
-            elif c in string.whitespace:
-                pass
-            elif c == '<':
-                pos = chunk.find_pair(pos)
-                s += '<>'  # Leave out template internals.
-            elif c == '(':
-                pos = chunk.find_pair(pos)
-                s += '()'  # Leave out argument internals.
-            elif c == '[':
-                pos = chunk.find_pair(pos)
-                s += '[]'  # Leave out capture internals.
-            elif c == '{':
-                pos = chunk.find_pair(pos)
-                if 'class' in s:
-                    # Ensure class definition is followed by
-                    # a semi-colon.
-                    for trailing_c in chunk[pos:]:
-                        if trailing_c == ';':
-                            break
-                        if trailing_c not in string.whitespace:
-                            raise ParsingException(
-                                'Class definition seems to be missing'
-                                f'semi-colon in {chunk[:pos]}. Unexpected '
-                                'character found after class: '
-                                f'{repr(trailing_c)}'
-                            )
-                        pos += 1
-                    else:
-                        raise ParsingException(
-                            'No semi-colon found after class in '
-                            f'{chunk[:pos]}')
-                    component = CppClassDefinition(chunk[:pos + 1])
-                    break
-                if s.endswith('()'):  # Function
-                    if in_func and '[]' not in s:
-                        raise ParsingException(
-                            'Seemed to find function definition within'
-                            'another function definition in '
-                            f'{chunk[:pos + 1]}')
-                    component = FunctionDefinition(chunk[:pos + 1])
-                    break
-                # Other occurrences of curly brackets are ignored.
-            else:
-                s += c
-            pos += 1
-        if not component:
-            raise ComponentCreationError(f'No component found in {chunk}')
-        return component
-
-    @property
-    def tokens(self) -> ty.Set[str]:
-        if self._tokens is None:
-            self._tokens = self.chunk.tokenize()
-        assert isinstance(self._tokens, set)
-        return self._tokens
-
-    @property
-    def used_constructs(self) -> ty.Dict[str, 'Construct']:
-        """
-        Retrieves dict of constructs used by the Component.
-
-        :return: dict of Constructs.
-        :rtype: Dict[str, Construct]
-        """
-        return {name: Construct(name) for name in self.tokens}
-
-    @property
-    def declared_constructs(self) -> ty.Dict[str, 'Construct']:
-        """
-        Retrieves dict of constructs which are declared by
-        this component.
-        :return: dict of Constructs
-        :rtype: Dict[str, Construct]
-        """
-        return {}
-
-    @property
-    def defined_constructs(self) -> ty.Dict[str, 'Construct']:
-        """
-        Retrieves dict of constructs which are defined by
-        this component.
-        :return: dict of Constructs
-        :rtype: Dict[str, Construct]
-        """
-        return {}
-
-    @property
-    def sub_components(self) -> ty.List['Component']:
-        """
-        Gets collection of other components contained within
-        the Component.
-        :return: collection of Components
-        :rtype: Collection[Component]
-        """
-        return []
-
-
-class Block(Component):
-    """
-
-    """
-
-    def __init__(
-            self,
-            file_content: 'SourceContent',
-            start: 'SourcePosI' = None,
-            end: ty.Optional['SourcePosI'] = None
-    ) -> None:
-        super().__init__(file_content, start, end)
-        self._sub_components: ty.Optional[ty.List['Component']] = None
-
-    @property
-    def sub_components(self) -> ty.List['Component']:
-        if self._sub_components is None:
-            self._sub_components = []
-            pos = self.chunk.start
-            if self.chunk[pos] == '{':
-                pos += 1
-            try:
-                component = Component.create(self.chunk[pos:])
-            except ComponentCreationError:
-                pass  # Stop generating components
-            else:
-                self._sub_components.append(component)
-        assert isinstance(self._sub_components, list)
-        return self._sub_components
-
-
-class PreprocessorComponent(Component):
-    @classmethod
-    def create(cls, chunk: 'Chunk', in_func: bool = False) -> 'Component':
-        """
-        Create pre-processor macro component.
-
-        :param chunk: Chunk
-        :param in_func: Whether component exists within a
-                    function definition. Has no effect. Included for
-                    compatibility with parent class' method.
-        :return: PreprocessorComponent
-        """
-        # Check that passed chunk appears to contain a pre
-        # processor directive.
-        if not chunk.first_line.stripped.startswith('#'):
-            raise ValueError(
-                'Invalid chunk passed. '
-                'Expected chunk to start with \'#\'')
-
-        # First find end of preprocessor
-        for line in chunk.lines:
-            if not line.stripped[:-1].endswith('\\'):
-                # noinspection PyTypeChecker
-                end = chunk.pos(line.index, 'end')
-                break
-        else:
-            raise ParsingException(
-                f'No end to macro starting at {chunk.start} found.')
-        pre_processor_chunk = Chunk(chunk.file_content, chunk.start, end)
-        return PreprocessorComponent(pre_processor_chunk)
-
-
-class MiscStatement(Component):
-    """
-    Component containing a miscellaneous statement within a function.
-    """
-
-
-class FunctionDeclaration(Component):
-    """
-    Component containing the declaration of a function.
-
-    Initializing a variable can also be categorized as function
-    declarations, as without knowing details of types,
-    "a b();" could either be a declaration of a function that returns
-    "a" from a function called "b", or an instantiation of variable "b"
-    of type "a". In either case, a construct named "b" has been
-    declared, and so the effect should be the same.
-    """
-
-
-class MemberFunctionDeclaration(Component):
-    """
-    Component containing the declaration of a function.
-
-    Initializing a variable can also be categorized as function
-    declarations, as without knowing details of types,
-    "a b();" could either be a declaration of a function that returns
-    "a" from a function called "b", or an instantiation of variable "b"
-    of type "a". In either case, a construct named "b" has been
-    declared, and so the effect should be the same.
-    """
-
-
-class CppClassDeclaration(Component):
-    """
-    Component containing the declaration of a C++ class.
-    """
-
-
-class FunctionDefinition(Component):
-    """
-    Component containing the definition of a function.
-    """
-
-
-class MemberFunctionDefinition(Component):
-    """
-    Component containing the definition of a function.
-    """
-
-
-class CppClassDefinition(Component):
-    """
-    Component containing the definition of a C++ class.
-    """
-
-
-class UsingStatement(Component):
-    """
-    Component storing a using definition or declaration.
-    """
-    @classmethod
-    def create(cls, chunk: 'Chunk', in_func: bool = False) -> 'Component':
-        return UsingStatement(chunk)
-
-
-#######################################################################
-# Source Constructs
-
-
-class Construct:
-    """
-    """
-    _constructs = {}
-
-    def __new__(cls, name: str) -> 'Construct':
-        try:
-            construct = cls._constructs[name]
-        except KeyError:
-            construct = cls._constructs[name] = object.__new__(cls)
-        return construct
-
-    def __init__(self, name: str) -> None:
-        if hasattr(self, '_initialized'):
-            return
-        self._name = name
-        self._initialized = True
-        self._dep_names: ty.Set[str] = set()
-        self._declaration_dep_names: ty.Set[str] = set()
-
-    @classmethod
-    def clear(cls) -> None:
-        cls._constructs.clear()
-
-    @property
-    def name(self) -> str:
-        """
-        Gets name of Construct. Will be used as a unique key for
-        this construct.
-
-        :return: unique name for construct.
-        :rtype: Set[str]
-        """
-        raise NotImplementedError
-
-    @property
-    def status(self) -> 'Status':
-        return
-
-    @property
-    def declaration_status(self) -> 'Status':
-        return
-
-    @property
-    def dependencies(self) -> ty.Dict[str, 'Construct']:
-        """
-        Returns dict of all constructs that this construct depends on;
-        if any of the dependencies have changed, this Construct is
-        considered to have changed as well.
-
-        When doubt exists of whether a construct is a true dependency,
-        it should be included, to err on the side of correct
-        build output.
-
-        :return: set containing the names of all constructs this
-                    Construct depends on.
-        :rtype Set[str]
-        """
-        raise NotImplementedError
-
-    @property
-    def declaration_dependencies(self) -> ty.Dict[str, 'Construct']:
-        """
-        Returns dict of all constructs on whose declaration this
-        construct depends on. Declaration dependencies will cause this
-        construct to rebuild only if their declaration has changed.
-        Changes to their definitions will not cause this construct
-        to rebuild.
-
-        When doubt exists of whether a construct is a true dependency,
-        it should be included, to err on the side of correct
-        build output.
-
-        :return: set containing the names of all constructs this
-                    Construct depends on.
-        :rtype Set[str]
-        """
-        raise NotImplementedError
 
 
 def iter_hash(gen: ty.Iterable[str], accept_none: bool = False) -> int:
@@ -1453,7 +1298,706 @@ def iter_hash(gen: ty.Iterable[str], accept_none: bool = False) -> int:
                 'None received. Enable accept_none if this is expected.')
         s_hash = int(hashlib.md5(s.encode()).hexdigest(), 16)
         result = (result * prime + s_hash) % sys.maxsize
+    assert isinstance(result, int)
     return result
+
+
+#######################################################################
+# Source Components
+
+class ScopeType(enum.Enum):
+    GLOBAL = 1
+    CLASS = 2
+    FUNC = 3
+
+
+class Component:
+    """
+    Base class for code units
+
+    Component instances represent a specific occurrence of a type,
+    declaration, definition, etc in code.
+
+    Parent to: Preprocessor, Statement, FuncDec, FuncDef, ClassDec,
+        ClassDef, and Block.
+    """
+    def __init__(
+            self,
+            file_content: ty.Union['SourceContent', 'Chunk'],
+            start: 'SourcePos' = None,
+            end: ty.Optional['SourcePos'] = None
+    ) -> None:
+        """
+        Creates a new component from the passed area of source.
+
+        :param file_content: SourceContent for file that
+                    contains Component.
+        :param start: SourcePos. Indices may be negative.
+        :param end: SourcePos. Indices may be negative.
+        """
+        if isinstance(file_content, Chunk):
+            self.chunk = file_content
+        else:
+            self.chunk = Chunk(file_content, start, end)
+        self._tokens: ty.Optional[ty.Set[str]] = None
+
+    @classmethod
+    def create(
+            cls, 
+            chunk: 'Chunk', 
+            scope: 'ScopeType' = ScopeType.GLOBAL
+    ) -> 'Component':
+        """
+        Creates a Component from a passed position in source.
+        :return: Component
+        """
+        # This method should be broken up.
+        s = ''
+        pos = chunk.start
+        component: ty.Optional['Component'] = None
+        while True:
+            try:
+                c = chunk[pos]
+            except IndexError:
+                raise ComponentCreationError('End of block reached.')
+            # Check for label
+            # Consider component to be a label when a single ':'
+            # appears in s, that is not a class extension or beginning
+            # of an initialization.
+            if all(('class' not in s,
+                    '()' not in s,
+                    c != ':',
+                    s.endswith(':'),
+                    not s.endswith('::'))):
+                component = Label(chunk[:pos])
+                break
+            # Check for statement
+            if c == ';':
+                s += c
+                component_chunk = chunk[:pos + 1]
+                if scope == ScopeType.FUNC:
+                    component = MiscStatement(component_chunk)
+                else:
+                    if 'class' in s:
+                        component = CppClassForwardDeclaration(component_chunk)
+                    elif 'using' in s:
+                        component = UsingStatement.create(
+                            component_chunk, scope)
+                    elif '()' in s:
+                        if scope == ScopeType.GLOBAL:
+                            component = FunctionDeclaration(component_chunk)
+                        elif scope == ScopeType.CLASS:
+                            component = \
+                                MemberFunctionDeclaration(component_chunk)
+                    else:
+                        component = MiscStatement(component_chunk)
+                break
+            # Check for preprocessor directive
+            elif pos.col_i == 0 and chunk.line(pos).stripped.startswith('#'):
+                component = PreprocessorComponent.create(chunk[pos:])
+                break
+            elif c in string.whitespace:
+                pass
+            elif c == '<' and scope != ScopeType.FUNC:
+                # If outside function, '<'
+                pos = chunk.find_pair(pos)
+                s += '<>'  # Leave out template internals.
+            elif c == '(':
+                pos = chunk.find_pair(pos)
+                s += '()'  # Leave out argument internals.
+            elif c == '[':
+                pos = chunk.find_pair(pos)
+                s += '[]'  # Leave out capture internals.
+            elif c == '{':
+                # Check if brackets are a control block
+                prefix_tokens = set(scope_tokens(chunk[:pos]))
+                pos = chunk.find_pair(pos)
+                if 'namespace' in s:
+                    component = NamespaceComponent(chunk[:pos + 1])
+                    break
+                if 'class' in s:
+                    # Ensure class definition is followed by
+                    # a semi-colon.
+                    for trailing_c in chunk[pos + 1:]:
+                        pos += 1
+                        if trailing_c == ';':
+                            break
+                        if trailing_c not in string.whitespace:
+                            raise ParsingException(
+                                'Class definition seems to be missing'
+                                f'semi-colon in {chunk[:pos]}. Unexpected '
+                                'character found after class: '
+                                f'{repr(trailing_c)}'
+                            )
+                    else:
+                        raise ParsingException(
+                            'No semi-colon found after class in '
+                            f'{chunk[:pos]}')
+                    component = CppClassDefinition(chunk[:pos + 1])
+                    break
+                if s.endswith('()'):  # Function
+                    if any(kw in prefix_tokens for
+                           kw in ControlBlock.KEYWORDS):
+                        component = ControlBlock(chunk[:pos + 1])
+                    elif scope == ScopeType.FUNC and '[]' not in s:
+                        raise ParsingException(
+                            'Seemed to find function definition within'
+                            'another function definition in '
+                            f'{chunk[:pos + 1]}')
+                    elif scope == ScopeType.GLOBAL:
+                        component = FunctionDefinition(chunk[:pos + 1])
+                    elif scope == ScopeType.CLASS:
+                        component = MemberFunctionDefinition(chunk[:pos + 1])
+                    break
+                # Other occurrences of curly brackets are ignored.
+            else:
+                s += c
+            try:
+                pos += 1
+            except ValueError:
+                break
+        if not component:
+            raise ComponentCreationError(f'No component found in {chunk}')
+        return component
+
+    @property
+    def tokens(self) -> ty.List[str]:
+        if self._tokens is None:
+            self._tokens = self._find_tokens()
+        return self._tokens
+
+    def used_constructs(
+            self,
+            constructs: ty.Dict[str, 'Construct']
+    ) -> ty.Dict[str, 'Construct']:
+        """
+        Retrieves dict of constructs used by the Component.
+
+        :return: dict of Constructs.
+        :rtype: Dict[str, Construct]
+        """
+        return {token: constructs[token] for token in self.tokens
+                if token in constructs and
+                getattr(self, 'name', None) != token}
+
+    @property
+    def construct_content(self) -> ty.Dict[str, ty.List['Component']]:
+        """
+        Gets content provided by the Component for Construct(s).
+        :return: dict of content chunks stored by construct name.
+        :rtype: Dict[str, List[Chunk]]
+        """
+        return {}
+
+    @property
+    def exposed_content(self) -> ty.List['Chunk']:
+        """
+        Gets content provided by component which affects compilation
+        even if constructs declared or created by the component are
+        not used.
+
+        :return: List of chunks used by program regardless of whether
+                    constructs modified by this component are used.
+        :rtype: List[Chunk]
+        """
+        return [self.chunk]
+
+    @property
+    def sub_components(self) -> ty.List['Component']:
+        """
+        Gets collection of other components contained within
+        the Component.
+        :return: collection of Components
+        :rtype: Collection[Component]
+        """
+        return []
+
+    def _find_tokens(self) -> ty.List[str]:
+        return self.chunk.tokenize()
+
+
+class Block(Component):
+    """
+    Class representing block of code, such as comprises a part of a
+    class declaration or function definition.
+    """
+
+    def __init__(
+            self,
+            file_content: ty.Union['SourceContent', 'Chunk'],
+            start: 'SourcePos' = None,
+            end: ty.Optional['SourcePos'] = None,
+            scope_type: 'ScopeType' = ScopeType.GLOBAL
+    ) -> None:
+        super().__init__(file_content, start, end)
+        self._sub_components: ty.Optional[ty.List['Component']] = None
+        self._tags: ty.Optional[ty.Set[str]] = None
+        self.scope_type = scope_type
+
+    @property
+    def sub_components(self) -> ty.List['Component']:
+        if self._sub_components is None:
+            self._sub_components = []
+            pos = self.chunk.start
+            end = None
+            if self.chunk[pos] == '{':
+                pos += 1
+                if self.chunk[-1] == '}':
+                    end = self.chunk.end - 1
+            while True:
+                try:
+                    component = Component.create(
+                        self.chunk[pos:end], scope=self.scope_type)
+                except ComponentCreationError:
+                    break  # Stop generating components
+                else:
+                    self._sub_components.append(component)
+                    pos = component.chunk.end
+        return self._sub_components
+
+    @property
+    def tags(self) -> ty.Set[str]:
+        if self._tags is None:
+            start_line = self.chunk.start.line_i
+            end_line = self.chunk.end.line_i
+            for line_i in range(start_line, end_line):
+                # Only adopt tags from lines without some other statement
+                pass  # TODO
+
+        return self._tags
+
+    def __repr__(self) -> str:
+        return f'Block[{self.chunk.bounds_description}]'
+
+
+class NamespaceComponent(Component):
+    """
+    Component containing the code that comprises a cpp namespace.
+    """
+    def __init__(
+            self,
+            file_content: ty.Union['SourceContent', 'Chunk'],
+            start: 'SourcePos' = None,
+            end: ty.Optional['SourcePos'] = None,
+    ) -> None:
+        super().__init__(file_content, start, end)
+        self.block = self._find_block()
+        self.prefix: 'Chunk' = self.chunk[:self.block.chunk.start]
+
+    def _find_block(self) -> 'Block':
+        block_start = find_in_scope('{', self.chunk)
+        return Block(self.chunk[block_start:])
+
+    @property
+    def sub_components(self):
+        return self.block.sub_components
+
+    @property
+    def exposed_content(self) -> ty.List['Chunk']:
+        return [self.prefix.strip()]
+
+    def _find_tokens(self) -> ty.List[str]:
+        return self.prefix.tokenize()
+
+
+class PreprocessorComponent(Component):
+    @classmethod
+    def create(
+            cls,
+            chunk: 'Chunk',
+            scope: 'ScopeType' = ScopeType.GLOBAL
+    ) -> 'Component':
+        """
+        Create pre-processor macro component.
+
+        :param chunk: Chunk
+        :param scope: Variety of scope that component exists within.
+                    Has no effect. Included for
+                    compatibility with parent class' method.
+        :return: PreprocessorComponent
+        """
+        # Check that passed chunk appears to contain a pre
+        # processor directive.
+        if not chunk.first_line.stripped.startswith('#'):
+            raise ValueError(
+                'Invalid chunk passed. '
+                'Expected chunk to start with \'#\'')
+
+        # First find end of preprocessor
+        for line in chunk.lines:
+            if not line.stripped[:-1].endswith('\\'):
+                end = chunk.pos(line.index, 'end')
+                break
+        else:
+            raise ParsingException(
+                f'No end to macro starting at {chunk.start} found.')
+        pre_processor_chunk = Chunk(chunk.file_content, chunk.start, end)
+        return PreprocessorComponent(pre_processor_chunk)
+
+    def __repr__(self):
+        if len(self.chunk) < 20:
+            preview = str(self.chunk)
+        else:
+            preview = str(self.chunk[:self.chunk.start + 20]) + '...'
+        return f'PreprocessorComponent[{preview}]'
+
+
+class MiscStatement(Component):
+    """
+    Component containing a miscellaneous statement within a function.
+    """
+
+    def __repr__(self):
+        if len(self.chunk) < 40:
+            preview = str(self.chunk)
+        else:
+            preview = str(self.chunk[:self.chunk.start + 40]) + '...'
+        return f'MiscStatement[{preview}]'
+
+
+class FunctionDeclaration(Component):
+    """
+    Component containing the declaration of a function.
+
+    Initializing a variable can also be categorized as function
+    declarations, as without knowing details of types,
+    "a b();" could either be a declaration of a function that returns
+    "a" from a function called "b", or an instantiation of variable "b"
+    of type "a". In either case, a construct named "b" has been
+    declared, and so the effect should be the same.
+    """
+
+    @property
+    def name(self) -> str:
+        first_parenthesis = find_in_scope('(', self.chunk)
+        return scope_tokens(self.chunk[:first_parenthesis])[-1]
+
+    @property
+    def construct_content(self) -> ty.Dict[str, ty.List['Component']]:
+        return {self.name: [self]}
+
+    @property
+    def exposed_content(self) -> ty.List['Chunk']:
+        """
+        Since function definitions cannot change the operation of a
+        program without being used, function declarations have
+        no exposed content.
+        :return: Empty list.
+        """
+        return []
+
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}[{self.name}]'
+
+
+class MemberFunctionDeclaration(FunctionDeclaration):
+    """
+    Component containing the declaration of a function.
+
+    Initializing a variable can also be categorized as function
+    declarations, as without knowing details of types,
+    "a b();" could either be a declaration of a function that returns
+    "a" from a function called "b", or an instantiation of variable "b"
+    of type "a". In either case, a construct named "b" has been
+    declared, and so the effect should be the same.
+    """
+
+    exposed_content = Component.exposed_content
+
+
+class CppClassForwardDeclaration(Component):
+    """
+    Component containing the declaration of a C++ class.
+    """
+    def __init__(
+            self,
+            file_content: ty.Union['SourceContent', 'Chunk'],
+            start: 'SourcePos' = None,
+            end: ty.Optional['SourcePos'] = None
+    ) -> None:
+        super().__init__(file_content, start, end)
+        self.name = self.chunk.tokenize()[-1]
+
+
+class FunctionDefinition(Component):
+    """
+    Component containing the definition of a function.
+    """
+    def __init__(
+            self,
+            file_content: ty.Union['SourceContent', 'Chunk'],
+            start: 'SourcePos' = None,
+            end: ty.Optional['SourcePos'] = None
+    ) -> None:
+        super().__init__(file_content, start, end)
+        self.inner_block = self._find_block()
+        self.prefix: 'Chunk' = self.chunk[:self.inner_block.chunk.start]
+        first_parenthesis = find_in_scope('(', self.chunk)
+        self.name = scope_tokens(self.chunk[:first_parenthesis])[-1]
+
+    def _find_block(self) -> 'Block':
+        block_start = find_in_scope('{', self.chunk)
+        return Block(self.chunk[block_start:], scope_type=ScopeType.FUNC)
+
+    def used_constructs(
+            self,
+            constructs: ty.Dict[str, 'Construct']
+    ) -> ty.Dict[str, 'Construct']:
+        used: ty.Dict[str, 'Construct'] = super().used_constructs(constructs)
+        for component in self.inner_block.sub_components:
+            used.update(component.used_constructs(constructs))
+        return used
+
+    @property
+    def construct_content(self) -> ty.Dict[str, ty.List['Component']]:
+        # noinspection PyTypeChecker
+        content: ty.List['Component'] = [MiscStatement(self.prefix)] + \
+            self.inner_block.sub_components
+        return {self.name: content}
+
+    @property
+    def exposed_content(self) -> ty.List['Chunk']:
+        """
+        Gets content provided by component which affects compilation
+        even if constructs declared or created by the component are
+        not used.
+
+        In the case of non-member FunctionDeclarations this is always
+        an empty list.
+
+        :return Empty List
+        :rtype: List['Chunk']
+        """
+        return []
+
+    def _find_tokens(self) -> ty.List[str]:
+        return self.prefix.tokenize()
+
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}[{self.name}]'
+
+
+class MemberFunctionDefinition(FunctionDefinition):
+    """
+    Component containing the definition of a function.
+    """
+
+    @property
+    def exposed_content(self) -> ty.List['Chunk']:
+        return [self.prefix.strip()]
+
+
+class CppClassDefinition(Component):
+    """
+    Component containing the definition of a C++ class.
+    """
+    def __init__(
+            self,
+            file_content: ty.Union['SourceContent', 'Chunk'],
+            start: 'SourcePos' = None,
+            end: ty.Optional['SourcePos'] = None
+    ) -> None:
+        super().__init__(file_content, start, end)
+        self.inner_block = self._find_block()
+        self.prefix: 'Chunk' = self.chunk[:self.inner_block.chunk.start]
+        self.name = self._find_name()
+
+    def _find_block(self) -> 'Block':
+        block_start = find_in_scope('{', self.chunk)
+        end = self.chunk.end - 1
+        return Block(self.chunk[block_start:end], scope_type=ScopeType.CLASS)
+
+    def _find_name(self) -> str:
+        prefix_tokens = scope_tokens(self.prefix)
+        return prefix_tokens[prefix_tokens.index('class') + 1]
+
+    def used_constructs(
+            self,
+            constructs: ty.Dict[str, 'Construct']
+    ) -> ty.Dict[str, 'Construct']:
+        used: ty.Dict[str, 'Construct'] = super().used_constructs(constructs)
+        for component in self.member_components:
+            used.update(component.used_constructs(constructs))
+        return used
+
+    @property
+    def construct_content(self) -> ty.Dict[str, ty.List['Component']]:
+        own_content = self.inner_block.sub_components
+        construct_content = {self.name: own_content.copy()}
+        for component in self.inner_block.sub_components:
+            update_content(construct_content, component.construct_content)
+        return construct_content
+
+    @property
+    def exposed_content(self) -> ty.List['Chunk']:
+        return [self.prefix.strip()]
+    
+    @property
+    def member_components(self) -> ty.List['Component']:
+        return self.inner_block.sub_components
+
+    def _find_tokens(self) -> ty.List[str]:
+        return self.prefix.tokenize()
+
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}[{self.name}]'
+
+
+class Label(Component):
+    """
+    Class representing c++ label components.
+    Ex: "private:"
+    """
+
+
+class ControlBlock(Component):
+
+    KEYWORDS = ('if', 'for', 'while', 'do')
+
+    def __init__(
+            self,
+            file_content: ty.Union['SourceContent', 'Chunk'],
+            start: 'SourcePos' = None,
+            end: ty.Optional['SourcePos'] = None
+    ) -> None:
+        super().__init__(file_content, start, end)
+        self.inner_block = self._find_block()
+        self.prefix: 'Chunk' = self.chunk[:self.inner_block.chunk.start]
+
+    def _find_block(self) -> 'Block':
+        block_start = find_in_scope('{', self.chunk)
+        return Block(self.chunk[block_start:], scope_type=ScopeType.CLASS)
+
+    @property
+    def sub_components(self) -> ty.List['Component']:
+        return self.inner_block.sub_components
+
+    @property
+    def exposed_content(self) -> ty.List['Chunk']:
+        return [self.prefix.strip()]
+
+    def _find_tokens(self) -> ty.List[str]:
+        return self.prefix.tokenize()
+
+
+class UsingStatement(Component):
+    """
+    Component storing a using definition or declaration.
+    """
+    @classmethod
+    def create(
+            cls, 
+            chunk: 'Chunk', 
+            scope: 'ScopeType' = ScopeType.GLOBAL
+    ) -> 'Component':
+        return UsingStatement(chunk)
+
+
+def find_in_scope(sub_str: str, chunk: 'Chunk') -> 'SourcePos':
+    """
+    Finds passed sub_str within the scope that begins at the start of
+    the passed chunk. Ignores quoted strings within chunk.
+
+    Chunk is assumed to contain no content from a higher level scope
+    than that at the beginning of the chunk, and is assumed not to
+    begin within a quote.
+
+    :param sub_str:
+    :param chunk:
+    :return:
+    """
+    s = ''
+    pos = chunk.start
+    while True:
+        if s.endswith(sub_str):
+            return pos - len(sub_str)
+        c = chunk[pos]
+        if (c in BRACKETS or c in '\'"') and (s + c).endswith(sub_str):
+            return pos - (len(sub_str) - 1)
+        if c in BRACKETS:
+            pos = chunk.find_pair(pos)
+            s = BRACKETS[c]
+        elif c in '\'"':
+            pos = chunk.find_quote_end(pos)
+            s = c
+        else:
+            s += c
+        try:
+            pos += 1
+        except ValueError:
+            raise KeyError(f'{sub_str} not found in {chunk}')
+
+
+def scope_tokens(chunk: 'Chunk', regex: str = r"[\w0-9]+") -> ty.List[str]:
+    """
+    Gets tokens in the highest level scope of the passed chunk.
+    Passed chunk should begin within the scope that tokens
+    are to be retrieved from, and not contain any content from a
+    higher level scope. IE: Chunk should end before the function /
+    class / etc ends.
+
+    :param chunk: Chunk to check for tokens.
+    :param regex: Optional regex to use for finding tokens.
+    :return: List[str]
+    """
+    s = ''
+    pos = chunk.start
+    while pos != chunk.end:
+        c = chunk[pos]
+        if c in BRACKETS:
+            pos = chunk.find_pair(pos)
+        elif c in '\'"':
+            pos = chunk.find_quote_end(pos)
+        else:
+            s += c
+        try:
+            pos += 1
+        except ValueError:
+            break
+    return re.findall(regex, s)
+
+
+def update_content(
+        a: ty.Dict[str, ty.List['Component']],
+        b: ty.Dict[str, ty.List['Component']]
+) -> None:
+    """
+    Adds component content of dict b to dict a.
+
+    :param a: Dictionary of components to be added to.
+    :param b: Dictionary of components to add.
+    :return: None
+    """
+    for k, v in b.items():
+        try:
+            content = a[k]
+        except KeyError:
+            content = a[k] = []
+        content += v
+
+
+class Construct:
+    """
+    """
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.used = False
+        self.content: ty.List['Component'] = []
+        self.tags: ty.Set[str] = set()
+
+    def add_content(self, content: ty.List['Component']) -> None:
+        """
+        Adds content chunks to construct.
+        :param content: List[Component]
+        :rtype: None
+        """
+        self.content += content
+
+    def add_tags(self, tags: ty.Set[str]) -> None:
+        self.tags |= tags
+
+    def __repr__(self) -> str:
+        return f'Construct[{self.name}, used={self.used}]'
 
 
 #######################################################################
@@ -1466,13 +2010,11 @@ def verbose(*args, **kwargs):
 
 def clear() -> None:
     SourceFile.clear()
-    Construct.clear()
 
 
 def main():
     global verbose_opt
-    parser = argparse.ArgumentParser(
-        description='Run Zen to focus compilation')
+    parser = argparse.ArgumentParser(description='Focus compilation')
     parser.add_argument('task')
     parser.add_argument('build_dir')
     parser.add_argument('-v', '--verbose', action='store_true')
