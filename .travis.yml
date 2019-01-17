@@ -1,0 +1,19 @@
+language: python
+dist: xenial
+python:
+  - '3.6'
+  - '3.6-dev'
+  - '3.7'
+  - '3.7-dev'
+  - '3.8-dev'
+compiler:
+  - gcc
+# command to install dependencies
+install:
+  - pip install codecov
+  - python setup.py install
+# command to run tests
+script:
+  - coverage run -m pytest
+after_success:
+  - codecov

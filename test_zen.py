@@ -1,8 +1,32 @@
+"""
+    '--------____________________________--------'
+    |    |              -ZEN-               |    |
+    |____|  Reducing recompilation times.   |____|
+         '----------------------------------'
+
+
+   Copyright 2019 TryExceptElse
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+
+"""
+
 from unittest import TestCase
 
 import os
 from pathlib import Path
 import shutil
+import sys
 import subprocess as sub
 import tempfile
 import typing as ty
@@ -128,7 +152,7 @@ class TestBuildDir(TestCase):
         """
         zen_path = Path(ROOT, 'zen.py')
         sub.check_call([
-            'python3.6',
+            sys.executable,
             str(zen_path),
             'meditate',
             str(build_path),
@@ -136,7 +160,7 @@ class TestBuildDir(TestCase):
         ])
         out = sub.check_output(['make'])
         sub.check_call([
-            'python3.6',
+            sys.executable,
             str(zen_path),
             'remember',
             str(build_path),
@@ -916,14 +940,22 @@ class TestFunctionDefinition(TestCase):
             definition.tokens
         )
 
-    def test_tags_are_found(self):
+    def test_tags_are_found_in_multi_line_function(self):
         content = zen.SourceContent(
             'void Sample() const {\n'
-            '   // ZEN(note1)'
-            '   foo();  // ZEN(note2)'
+            '   // ZEN(note1)\n'
+            '   foo();  // ZEN(note2)\n'
+            '}'
         )
         definition = zen.FunctionDefinition(content.component.chunk)
         self.assertEqual({'note1'}, definition.tags)
+
+    def test_tags_are_found_in_single_line_function(self):
+        content = zen.SourceContent(
+            'void Sample() const { foo(); }  // ZEN(note2)'
+        )
+        definition = zen.FunctionDefinition(content.component.chunk)
+        self.assertEqual({'note2'}, definition.tags)
 
     def test_definition_has_no_external_content(self):
         """
@@ -1081,3 +1113,10 @@ class TestIterHash(TestCase):
     def test_hash_is_repeatable(self):
         result: int = zen.iter_hash((s for s in ['a', 'b', 'c']))
         self.assertEqual(8304879420899386742, result)
+
+
+class TestParseTags(TestCase):
+    def test_parse_tags(self):
+        assert zen.parse_tags('    int i = 0; ') == set()
+        assert zen.parse_tags('    int i = 1;  // Some comment') == set()
+        assert zen.parse_tags('    int i = 2;  // comment ZEN(foo)') == {'foo'}

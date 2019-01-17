@@ -1,10 +1,30 @@
 """
-Zen: Reducing recompilation times.
+    '--------____________________________--------'
+    |    |              -ZEN-               |    |
+    |____|  Reducing recompilation times.   |____|
+         '----------------------------------'
+
+
+   Copyright 2019 TryExceptElse
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+
 """
 
 import argparse
 import enum
 import hashlib
+import itertools
 import json
 import os
 from pathlib import Path
@@ -868,6 +888,11 @@ class SourcePos:
                 f'{original_n} is too large.')
 
     def __hash__(self) -> int:
+        """
+        Custom hash for SourcePos that allows equivalent SourcePos
+        instances to have equal hashes.
+        :return: int
+        """
         return hash((self.file_content, self.line_i, self.col_i, self.form))
 
     def __eq__(self, other) -> bool:
@@ -1088,6 +1113,10 @@ class Chunk:
 
     @property
     def index_range(self) -> range:
+        """
+        Range of valid int indices in chunk.
+        :return: range
+        """
         if self._index_range is None:
             # populate sorted dict?
             assert isinstance(self.start, SourcePos)
@@ -1336,10 +1365,11 @@ class Component:
         :param end: SourcePos. Indices may be negative.
         """
         if isinstance(file_content, Chunk):
-            self.chunk = file_content
+            self.chunk = file_content.strip()
         else:
-            self.chunk = Chunk(file_content, start, end)
+            self.chunk = Chunk(file_content, start, end).strip()
         self._tokens: ty.Optional[ty.Set[str]] = None
+        self._tags: ty.Optional[ty.Set[str]] = None
 
     @classmethod
     def create(
@@ -1465,6 +1495,37 @@ class Component:
         if self._tokens is None:
             self._tokens = self._find_tokens()
         return self._tokens
+
+    @property
+    def tags(self) -> ty.Set[str]:
+        if self._tags is None:
+            if len(self.chunk.lines) == 1:
+                return parse_tags(
+                    self.chunk.first_line.s(SourceForm.RAW))
+
+            # Find inner components which will disqualify lines from
+            # being checked for tags that apply to this component.
+            if hasattr(self, 'inner_block'):
+                inner_components = itertools.chain(
+                    self.sub_components,
+                    getattr(self, 'inner_block').sub_components
+                )
+            else:
+                inner_components = self.sub_components
+
+            # Produce set of lines will be checked for tags.
+            lines = {line for line in self.chunk.lines}
+            for sub_component in inner_components:
+                for line in sub_component.chunk.lines:
+                    if line in lines:
+                        lines.remove(line)
+
+            # Parse lines for tags.
+            tags: ty.Set[str] = set()
+            for line in lines:
+                tags |= parse_tags(line.s(SourceForm.RAW))
+            self._tags = tags
+        return self._tags
 
     def used_constructs(
             self,
@@ -1902,9 +1963,10 @@ def find_in_scope(sub_str: str, chunk: 'Chunk') -> 'SourcePos':
     than that at the beginning of the chunk, and is assumed not to
     begin within a quote.
 
-    :param sub_str:
-    :param chunk:
-    :return:
+    :param sub_str: str to find within Chunk.
+    :param chunk: Chunk of source to search.
+    :return: SourcePos indicating start of passed sub_str in chunk.
+    :rtype: SourcePos
     """
     s = ''
     pos = chunk.start
@@ -1976,6 +2038,18 @@ def update_content(
         content += v
 
 
+def parse_tags(s: str) -> ty.Set[str]:
+    if '//' not in s or 'ZEN(' not in s:
+        return set()
+    comment = s[s.find('//') + 2:]
+    matches = re.findall(r'ZEN\([^()]*\)', comment)
+    tags: ty.Set[str] = set()
+    for match in matches:
+        tags_s = match[4:-1]
+        tags |= {tag.strip() for tag in tags_s.split(',') if tag.strip()}
+    return tags
+
+
 class Construct:
     """
     """
@@ -2009,6 +2083,10 @@ def verbose(*args, **kwargs):
 
 
 def clear() -> None:
+    """
+    Clears all statically cached objects.
+    :return: None
+    """
     SourceFile.clear()
 
 
