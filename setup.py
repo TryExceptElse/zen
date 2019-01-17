@@ -24,16 +24,20 @@ setup(
         # Audience / Project Category.
         'Intended Audience :: Developers',
         'Topic :: Software Development :: Build Tools',
+        'Topic :: Utilities',
 
-        'License :: OSI Approved :: Apache license',
+        'License :: OSI Approved :: Apache Software License',
 
-        'Programming Language :: Python :: 3.5',
+        'Operating System :: POSIX :: Linux',
+
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
     ],
     keywords='c++ cpp cxx zen compile compiler compilation recompilation '
              'static analysis optimization focus whitespace',
     install_requires=[],
+    python_requires='>=3.6.0',
     entry_points={
         'console_scripts': [
             'zen=zen:main',
