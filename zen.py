@@ -219,6 +219,12 @@ class Target:
             self.avoid_build()
 
     def remember(self) -> None:
+        """
+        Stores information about the current form of the target,
+        so that it may later be determined later what has been changed
+        substantially enough to require recompilation.
+        :return: None
+        """
         for obj in self.objects:
             obj.remember()
 
@@ -232,6 +238,12 @@ class Target:
 
     @staticmethod
     def type_from_path(path: ty.Union[str, Path]) -> TargetType:
+        """
+        Determine the TargetType from the name of the file
+        produced by the target.
+        :param path: 
+        :return: 
+        """
         ext = os.path.splitext(path)[1]
         return {
             '': TargetType.EXECUTABLE,
@@ -835,6 +847,15 @@ class SourcePos:
         self.col_i = col_i
 
     def __add__(self, n: int) -> 'SourcePos':
+        """
+        Produces a new SourcePos object that has a char index n higher
+        than the SourcePos on which this method was called.
+
+        :param n: int
+        :return: newly created SourcePos.
+        :raise: ValueError if n is too large (either positive or
+                    negative) to be added to the SourcePos.
+        """
         if n < 0:
             return self - abs(n)
         original_n = n
@@ -860,6 +881,15 @@ class SourcePos:
                 f'{original_n} is too large.')
 
     def __sub__(self, n: int) -> 'SourcePos':
+        """
+        Produces a new SourcePos object that has a char index n lower
+        than the SourcePos on which this method was called.
+        
+        :param n: int
+        :return: newly created SourcePos.
+        :raise: ValueError if n is too large (either positive or
+                    negative) to be subtracted from the SourcePos.
+        """
         if n < 0:
             return self + abs(n)
         original_n = n
@@ -1247,6 +1277,10 @@ class Chunk:
         return containing_line.s(self.form)[line_col]
 
     def __str__(self):
+        """
+        Gets str content of chunk.
+        :return: str
+        """
         s = ''
         if self.first_line is self.last_line:
             line_s = self.first_line.s(self.form)
@@ -1498,6 +1532,10 @@ class Component:
 
     @property
     def tags(self) -> ty.Set[str]:
+        """
+        Finds tags that have been assigned to this component.
+        :return: Set of tag strings.
+        """
         if self._tags is None:
             if len(self.chunk.lines) == 1:
                 return parse_tags(
@@ -1574,6 +1612,12 @@ class Component:
         return []
 
     def _find_tokens(self) -> ty.List[str]:
+        """
+        Method used to find tokens for return by 'tokens' property.
+        May be overridden in subclasses without having to re-implement
+        the full 'tokens' property.
+        :return: List[str]
+        """
         return self.chunk.tokenize()
 
 
@@ -1615,17 +1659,6 @@ class Block(Component):
                     self._sub_components.append(component)
                     pos = component.chunk.end
         return self._sub_components
-
-    @property
-    def tags(self) -> ty.Set[str]:
-        if self._tags is None:
-            start_line = self.chunk.start.line_i
-            end_line = self.chunk.end.line_i
-            for line_i in range(start_line, end_line):
-                # Only adopt tags from lines without some other statement
-                pass  # TODO
-
-        return self._tags
 
     def __repr__(self) -> str:
         return f'Block[{self.chunk.bounds_description}]'
@@ -2039,6 +2072,18 @@ def update_content(
 
 
 def parse_tags(s: str) -> ty.Set[str]:
+    """
+    Parse passed string for tags (ie: 'ZEN(shallow)' ) within 
+    passed string. 
+    
+    Intended to be passed raw line strings. 
+    
+    Does not look within block comments, as it is expected that all
+    tags are in comments following a statement, or within a block.
+    
+    :param s: Line str to search for tags.
+    :return: Set[str]
+    """
     if '//' not in s or 'ZEN(' not in s:
         return set()
     comment = s[s.find('//') + 2:]
