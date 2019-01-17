@@ -916,14 +916,22 @@ class TestFunctionDefinition(TestCase):
             definition.tokens
         )
 
-    def test_tags_are_found(self):
+    def test_tags_are_found_in_multi_line_function(self):
         content = zen.SourceContent(
             'void Sample() const {\n'
-            '   // ZEN(note1)'
-            '   foo();  // ZEN(note2)'
+            '   // ZEN(note1)\n'
+            '   foo();  // ZEN(note2)\n'
+            '}'
         )
         definition = zen.FunctionDefinition(content.component.chunk)
         self.assertEqual({'note1'}, definition.tags)
+
+    def test_tags_are_found_in_single_line_function(self):
+        content = zen.SourceContent(
+            'void Sample() const { foo(); }  // ZEN(note2)'
+        )
+        definition = zen.FunctionDefinition(content.component.chunk)
+        self.assertEqual({'note2'}, definition.tags)
 
     def test_definition_has_no_external_content(self):
         """
@@ -1081,3 +1089,10 @@ class TestIterHash(TestCase):
     def test_hash_is_repeatable(self):
         result: int = zen.iter_hash((s for s in ['a', 'b', 'c']))
         self.assertEqual(8304879420899386742, result)
+
+
+class TestParseTags(TestCase):
+    def test_parse_tags(self):
+        assert zen.parse_tags('    int i = 0; ') == set()
+        assert zen.parse_tags('    int i = 1;  // Some comment') == set()
+        assert zen.parse_tags('    int i = 2;  // comment ZEN(foo)') == {'foo'}

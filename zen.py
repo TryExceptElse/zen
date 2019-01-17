@@ -5,6 +5,7 @@ Zen: Reducing recompilation times.
 import argparse
 import enum
 import hashlib
+import itertools
 import json
 import os
 from pathlib import Path
@@ -1345,10 +1346,11 @@ class Component:
         :param end: SourcePos. Indices may be negative.
         """
         if isinstance(file_content, Chunk):
-            self.chunk = file_content
+            self.chunk = file_content.strip()
         else:
-            self.chunk = Chunk(file_content, start, end)
+            self.chunk = Chunk(file_content, start, end).strip()
         self._tokens: ty.Optional[ty.Set[str]] = None
+        self._tags: ty.Optional[ty.Set[str]] = None
 
     @classmethod
     def create(
@@ -1474,6 +1476,37 @@ class Component:
         if self._tokens is None:
             self._tokens = self._find_tokens()
         return self._tokens
+
+    @property
+    def tags(self) -> ty.Set[str]:
+        if self._tags is None:
+            if len(self.chunk.lines) == 1:
+                return parse_tags(
+                    self.chunk.first_line.s(SourceForm.RAW))
+
+            # Find inner components which will disqualify lines from
+            # being checked for tags that apply to this component.
+            if hasattr(self, 'inner_block'):
+                inner_components = itertools.chain(
+                    self.sub_components,
+                    getattr(self, 'inner_block').sub_components
+                )
+            else:
+                inner_components = self.sub_components
+
+            # Produce set of lines will be checked for tags.
+            lines = {line for line in self.chunk.lines}
+            for sub_component in inner_components:
+                for line in sub_component.chunk.lines:
+                    if line in lines:
+                        lines.remove(line)
+
+            # Parse lines for tags.
+            tags: ty.Set[str] = set()
+            for line in lines:
+                tags |= parse_tags(line.s(SourceForm.RAW))
+            self._tags = tags
+        return self._tags
 
     def used_constructs(
             self,
@@ -1984,6 +2017,18 @@ def update_content(
         except KeyError:
             content = a[k] = []
         content += v
+
+
+def parse_tags(s: str) -> ty.Set[str]:
+    if '//' not in s or 'ZEN(' not in s:
+        return set()
+    comment = s[s.find('//') + 2:]
+    matches = re.findall(r'ZEN\([^()]*\)', comment)
+    tags: ty.Set[str] = set()
+    for match in matches:
+        tags_s = match[4:-1]
+        tags |= {tag.strip() for tag in tags_s.split(',') if tag.strip()}
+    return tags
 
 
 class Construct:
