@@ -1,6 +1,10 @@
 # Zen
 Focusing compilation.
 
+![Build Status](https://travis-ci.org/TryExceptElse/zen.svg?branch=master)
+[![codecov](https://codecov.io/gh/TryExceptElse/zen/branch/master/graph/badge.svg)](https://codecov.io/gh/TryExceptElse/zen)
+
+
 ## Levels:
 
 Zen has different levels that can be set project-wide, for specific 
