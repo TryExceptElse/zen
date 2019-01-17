@@ -1,7 +1,7 @@
 # Zen
 Focusing compilation.
 
-![Build Status](https://travis-ci.org/TryExceptElse/zen.svg?branch=master)
+[![Build Status](https://travis-ci.org/TryExceptElse/zen.svg?branch=master)](https://travis-ci.org/TryExceptElse/zen)
 [![codecov](https://codecov.io/gh/TryExceptElse/zen/branch/master/graph/badge.svg)](https://codecov.io/gh/TryExceptElse/zen)
 
 
