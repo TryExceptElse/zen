@@ -3,6 +3,7 @@ from unittest import TestCase
 import os
 from pathlib import Path
 import shutil
+import sys
 import subprocess as sub
 import tempfile
 import typing as ty
@@ -128,7 +129,7 @@ class TestBuildDir(TestCase):
         """
         zen_path = Path(ROOT, 'zen.py')
         sub.check_call([
-            'python3.6',
+            sys.executable,
             str(zen_path),
             'meditate',
             str(build_path),
@@ -136,7 +137,7 @@ class TestBuildDir(TestCase):
         ])
         out = sub.check_output(['make'])
         sub.check_call([
-            'python3.6',
+            sys.executable,
             str(zen_path),
             'remember',
             str(build_path),
