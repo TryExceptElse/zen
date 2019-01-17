@@ -868,6 +868,11 @@ class SourcePos:
                 f'{original_n} is too large.')
 
     def __hash__(self) -> int:
+        """
+        Custom hash for SourcePos that allows equivalent SourcePos
+        instances to have equal hashes.
+        :return: int
+        """
         return hash((self.file_content, self.line_i, self.col_i, self.form))
 
     def __eq__(self, other) -> bool:
@@ -1088,6 +1093,10 @@ class Chunk:
 
     @property
     def index_range(self) -> range:
+        """
+        Range of valid int indices in chunk.
+        :return: range
+        """
         if self._index_range is None:
             # populate sorted dict?
             assert isinstance(self.start, SourcePos)
@@ -1902,9 +1911,10 @@ def find_in_scope(sub_str: str, chunk: 'Chunk') -> 'SourcePos':
     than that at the beginning of the chunk, and is assumed not to
     begin within a quote.
 
-    :param sub_str:
-    :param chunk:
-    :return:
+    :param sub_str: str to find within Chunk.
+    :param chunk: Chunk of source to search.
+    :return: SourcePos indicating start of passed sub_str in chunk.
+    :rtype: SourcePos
     """
     s = ''
     pos = chunk.start
@@ -2009,6 +2019,10 @@ def verbose(*args, **kwargs):
 
 
 def clear() -> None:
+    """
+    Clears all statically cached objects.
+    :return: None
+    """
     SourceFile.clear()
 
 
