@@ -771,7 +771,7 @@ class Line:
         """
         if self._uncommented is None:
             raise AttributeError(
-                'Uncommented value of {repr(self)} has not been set.')
+                f'Uncommented value of {repr(self)} has not been set.')
         return self._uncommented
 
     @uncommented.setter
