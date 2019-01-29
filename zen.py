@@ -697,7 +697,7 @@ class SourceContent:
                 uncommented = unblocked
             else:
                 uncommented = unblocked[:line_comment_start]
-            if line.raw.endswith('\n'):
+            if line.raw.endswith('\n') and not uncommented.endswith('\n'):
                 uncommented += '\n'
             line.uncommented = uncommented
         self._stripped_comments = True
