@@ -11,7 +11,7 @@ setup(
     name='zen-compile',
     # Versions should comply with PEP 440:
     # https://www.python.org/dev/peps/pep-0440/
-    version='0.0.2',
+    version='0.0.3',
     description='Zen: Reducing recompilation times',
     long_description=readme,
     long_description_content_type='text/markdown',
