@@ -629,6 +629,11 @@ class TestSourcePos(TestCase):
         self.assertEqual('h', chunk[b])
         self.assertEqual('.', chunk[a])
 
+    def test_position_addition_throws_value_error_if_x_too_large(self):
+        content = zen.SourceContent('This file\nhas three\nlines.')
+        chunk = zen.Chunk(content)
+        self.assertRaises(ValueError, lambda: chunk.start + 27)
+
     def test_position_can_be_subtracted_from(self):
         content = zen.SourceContent('This file\nhas three\nlines.')
         chunk = zen.Chunk(content)
@@ -648,6 +653,11 @@ class TestSourcePos(TestCase):
         self.assertEqual('T', chunk[a])
         self.assertEqual('h', chunk[b])
         self.assertEqual('.', chunk[c])
+
+    def test_position_subtraction_throws_value_error_if_x_too_large(self):
+        content = zen.SourceContent('This file\nhas three\nlines.')
+        chunk = zen.Chunk(content)
+        self.assertRaises(ValueError, lambda: chunk.end - 27)
 
     def test_next_line_can_be_accessed(self):
         content = zen.SourceContent('This file\nhas three\nlines.')
@@ -686,6 +696,21 @@ class TestChunk(TestCase):
         s = '\n\n\n\n\n\nclass Foo'
         content = zen.SourceContent(s)
         self.assertEqual(s, str(zen.Chunk(content)))
+
+    def test_chunk_with_invalid_start_and_end_order_raises_error(self):
+        content = zen.SourceContent('This file\nhas three\nlines.')
+
+        # Passing an end line preceding the start line should
+        # cause an error.
+        start_pos1 = zen.SourcePos(content, 1, 2, zen.SourceForm.STRIPPED)
+        end_pos1 = zen.SourcePos(content, 0, 5, zen.SourceForm.STRIPPED)
+        self.assertRaises(ValueError, zen.Chunk, content, start_pos1, end_pos1)
+
+        # Passing an end col preceding the start col should
+        # cause an error if chunk starts and ends on the same line.
+        start_pos2 = zen.SourcePos(content, 0, 5, zen.SourceForm.STRIPPED)
+        end_pos2 = zen.SourcePos(content, 0, 2, zen.SourceForm.STRIPPED)
+        self.assertRaises(ValueError, zen.Chunk, content, start_pos2, end_pos2)
 
     def test_chunk_index_accessor_works_correctly(self):
         content = zen.SourceContent('This file\nhas three\nlines.')
@@ -1121,6 +1146,28 @@ class TestFindInScope(TestCase):
         result = zen.find_in_scope('{', chunk)
         self.assertEqual(6, result.line_i)
         self.assertEqual(0, result.col_i)
+
+    def test_find_in_scope_handles_quotes_correctly(self):
+        content = zen.SourceContent(
+            '\n\n\n\ntemplate <string s = "somestr{ng">\n'
+            'T custom_max(T x, T y)\n{\n'
+            'return (x > y)? x: y;\n'
+            '}'
+        )
+        chunk = content.component.chunk
+        result = zen.find_in_scope('{', chunk)
+        self.assertEqual(6, result.line_i)
+        self.assertEqual(0, result.col_i)
+
+    def test_raises_key_error_when_char_not_present_in_scope(self):
+        content = zen.SourceContent(
+            '\n\n\n\n'
+            'std::string DoTheThing(int x) {\n'
+            '    return "Foo";\n'
+            '}'
+        )
+        chunk = content.component.chunk
+        self.assertRaises(KeyError, zen.find_in_scope, 'F', chunk)
 
 
 class TestFindScopeTokens(TestCase):

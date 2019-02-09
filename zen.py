@@ -1355,6 +1355,11 @@ class Chunk:
 
 
 def join_hashes(hash_iterable: ty.Iterable[int]) -> int:
+    """
+    Join hashes of the passed iterable.
+    :param hash_iterable: Iterable[int]
+    :return: int
+    """
     prime = 31
     result: int = 1
     for sub_hash in hash_iterable:
@@ -2026,7 +2031,10 @@ def find_in_scope(sub_str: str, chunk: 'Chunk') -> 'SourcePos':
     while True:
         if s.endswith(sub_str):
             return pos - len(sub_str)
-        c = chunk[pos]
+        try:
+            c = chunk[pos]
+        except IndexError:
+            raise KeyError(f'{sub_str} not found in {chunk}')
         if (c in BRACKETS or c in '\'"') and (s + c).endswith(sub_str):
             return pos - (len(sub_str) - 1)
         if c in BRACKETS:
@@ -2037,10 +2045,7 @@ def find_in_scope(sub_str: str, chunk: 'Chunk') -> 'SourcePos':
             s = c
         else:
             s += c
-        try:
-            pos += 1
-        except ValueError:
-            raise KeyError(f'{sub_str} not found in {chunk}')
+        pos += 1
 
 
 def scope_tokens(chunk: 'Chunk', regex: str = r"[\w0-9]+") -> ty.List[str]:
