@@ -68,6 +68,8 @@ class TargetType(enum.Enum):
 
 LIB_TYPES = {TargetType.STATIC_LIB, TargetType.SHARED_LIB}
 
+HEADER_EXT = '.h', '.hpp', '.hh', '.hxx'
+
 BRACKETS = {
     '(': ')',
     '{': '}',
@@ -508,19 +510,26 @@ class CompileObject:
                     for component in construct.content:
                         yield from recurse_component(component)
 
-            def used_components() -> ty.Iterable['Component']:
-                for source in self.sources:
-                    content = source.content
-                    block = content.component
-                    for component in block.sub_components:
-                        yield from recurse_component(component)
+            def used_components(
+                    source: 'SourceFile') -> ty.Iterable['Component']:
+                content = source.content
+                block = content.component
+                for component in block.sub_components:
+                    yield from recurse_component(component)
 
-            def used_chunk_strings() -> ty.Iterable[str]:
-                for component in used_components():
+            def used_chunk_strings(source: 'SourceFile') -> ty.Iterable[str]:
+                for component in used_components(source):
                     for chunk in component.exposed_content:
                         yield str(chunk).strip()
 
-            self._used_content_hash = iter_hash(used_chunk_strings())
+            def source_hashes() -> ty.Iterable[int]:
+                for source in self.sources:
+                    if source.is_header:
+                        yield iter_hash(used_chunk_strings(source))
+                    else:
+                        yield source.stripped_hash
+
+            self._used_content_hash = join_hashes(source_hashes())
         return self._used_content_hash
 
     def create_constructs(self) -> ty.Dict[str, 'Construct']:
@@ -603,6 +612,10 @@ class SourceFile:
 
     def remember(self, cache: ty.Dict[str, int]) -> None:
         cache[self.hex] = self.stripped_hash
+
+    @property
+    def is_header(self) -> bool:
+        return self.path.suffix in HEADER_EXT
 
     @property
     def m_time(self) -> float:
@@ -1341,6 +1354,14 @@ class Chunk:
                 yield self.chunk.file_content.lines[i]
 
 
+def join_hashes(hash_iterable: ty.Iterable[int]) -> int:
+    prime = 31
+    result: int = 1
+    for sub_hash in hash_iterable:
+        result = (result * prime + sub_hash) % sys.maxsize
+    return result
+
+
 def iter_hash(gen: ty.Iterable[str], accept_none: bool = False) -> int:
     """
     Hashes content of iterable.
@@ -1353,14 +1374,13 @@ def iter_hash(gen: ty.Iterable[str], accept_none: bool = False) -> int:
     :rtype: int
     :raises ValueError if None is received and accept_none is False.
     """
-    prime = 31
-    result: int = 1
-    for s in gen:
-        if not accept_none and s is None:
-            raise ValueError(
-                'None received. Enable accept_none if this is expected.')
-        s_hash = int(hashlib.md5(s.encode()).hexdigest(), 16)
-        result = (result * prime + s_hash) % sys.maxsize
+    def hash_generator():
+        for s in gen:
+            if not accept_none and s is None:
+                raise ValueError(
+                    'None received. Enable accept_none if this is expected.')
+            yield int(hashlib.md5(s.encode()).hexdigest(), 16)
+    result = join_hashes(hash_generator())
     assert isinstance(result, int)
     return result
 

@@ -384,6 +384,31 @@ class TestBuildDir(TestCase):
         self.assertEqual(_out['no_rebuild'], second_out)
         self.assertEqual(_out['sample_rebuild'], last_out)
 
+    def test_change_in_unused_func_in_definition_file_causes_rebuild(self):
+        """
+        Because functions in definition files may be linked to despite
+        not being used in the currently compiled object, any change to
+        a definition within a definition (.cc / .cpp) file should cause
+        a rebuild of objects dependant on that file.
+        """
+        first_out, second_out, last_out = self.get_output_from_change(
+            # Add original red herring class.
+            after_setup=lambda project_dir: shutil.copy(
+                Path(TEST_RESOURCES_PATH, 'changed_hello1a.cc'),
+                Path(project_dir, 'hello', 'hello.cc')
+            ),
+            # Change red herring class.
+            # Since no substantive changes have been made,
+            # no objects should need to be rebuilt.
+            change_source=lambda project_dir: shutil.copy(
+                Path(TEST_RESOURCES_PATH, 'changed_hello1b.cc'),
+                Path(project_dir, 'hello', 'hello.cc')
+            )
+        )
+        self.assertEqual(_out['full_build'], first_out)
+        self.assertEqual(_out['no_rebuild'], second_out)
+        self.assertEqual(_out['hello_rebuild'], last_out)
+
 
 class TestTarget(TestCase):
     def tearDown(self):
