@@ -1,6 +1,10 @@
 # Zen
 Focusing compilation.
 
+[![Build Status](https://travis-ci.org/TryExceptElse/zen.svg?branch=master)](https://travis-ci.org/TryExceptElse/zen)
+[![codecov](https://codecov.io/gh/TryExceptElse/zen/branch/master/graph/badge.svg)](https://codecov.io/gh/TryExceptElse/zen)
+
+
 ## Levels:
 
 Zen has different levels that can be set project-wide, for specific 
@@ -53,6 +57,7 @@ These include:
 ## Todo:
  * Test + ensure correct operation of shallow mode
  * Implement deep mode
-    * Run block use analysis on header files only.
     * Consider operator overload functions to be used whenever their
         class is, since they are called without their name being used.
+    * Obey ZEN() tags within comments - Disable / Shallow / Deep
+    * Test on large codebase(s) to find bugs.

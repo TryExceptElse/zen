@@ -68,6 +68,8 @@ class TargetType(enum.Enum):
 
 LIB_TYPES = {TargetType.STATIC_LIB, TargetType.SHARED_LIB}
 
+HEADER_EXT = '.h', '.hpp', '.hh', '.hxx'
+
 BRACKETS = {
     '(': ')',
     '{': '}',
@@ -219,6 +221,12 @@ class Target:
             self.avoid_build()
 
     def remember(self) -> None:
+        """
+        Stores information about the current form of the target,
+        so that it may later be determined later what has been changed
+        substantially enough to require recompilation.
+        :return: None
+        """
         for obj in self.objects:
             obj.remember()
 
@@ -232,6 +240,12 @@ class Target:
 
     @staticmethod
     def type_from_path(path: ty.Union[str, Path]) -> TargetType:
+        """
+        Determine the TargetType from the name of the file
+        produced by the target.
+        :param path: 
+        :return: 
+        """
         ext = os.path.splitext(path)[1]
         return {
             '': TargetType.EXECUTABLE,
@@ -496,19 +510,26 @@ class CompileObject:
                     for component in construct.content:
                         yield from recurse_component(component)
 
-            def used_components() -> ty.Iterable['Component']:
-                for source in self.sources:
-                    content = source.content
-                    block = content.component
-                    for component in block.sub_components:
-                        yield from recurse_component(component)
+            def used_components(
+                    source: 'SourceFile') -> ty.Iterable['Component']:
+                content = source.content
+                block = content.component
+                for component in block.sub_components:
+                    yield from recurse_component(component)
 
-            def used_chunk_strings() -> ty.Iterable[str]:
-                for component in used_components():
+            def used_chunk_strings(source: 'SourceFile') -> ty.Iterable[str]:
+                for component in used_components(source):
                     for chunk in component.exposed_content:
                         yield str(chunk).strip()
 
-            self._used_content_hash = iter_hash(used_chunk_strings())
+            def source_hashes() -> ty.Iterable[int]:
+                for source in self.sources:
+                    if source.is_header:
+                        yield iter_hash(used_chunk_strings(source))
+                    else:
+                        yield source.stripped_hash
+
+            self._used_content_hash = join_hashes(source_hashes())
         return self._used_content_hash
 
     def create_constructs(self) -> ty.Dict[str, 'Construct']:
@@ -591,6 +612,10 @@ class SourceFile:
 
     def remember(self, cache: ty.Dict[str, int]) -> None:
         cache[self.hex] = self.stripped_hash
+
+    @property
+    def is_header(self) -> bool:
+        return self.path.suffix in HEADER_EXT
 
     @property
     def m_time(self) -> float:
@@ -685,7 +710,7 @@ class SourceContent:
                 uncommented = unblocked
             else:
                 uncommented = unblocked[:line_comment_start]
-            if line.raw.endswith('\n'):
+            if line.raw.endswith('\n') and not uncommented.endswith('\n'):
                 uncommented += '\n'
             line.uncommented = uncommented
         self._stripped_comments = True
@@ -759,7 +784,7 @@ class Line:
         """
         if self._uncommented is None:
             raise AttributeError(
-                'Uncommented value of {repr(self)} has not been set.')
+                f'Uncommented value of {repr(self)} has not been set.')
         return self._uncommented
 
     @uncommented.setter
@@ -835,6 +860,15 @@ class SourcePos:
         self.col_i = col_i
 
     def __add__(self, n: int) -> 'SourcePos':
+        """
+        Produces a new SourcePos object that has a char index n higher
+        than the SourcePos on which this method was called.
+
+        :param n: int
+        :return: newly created SourcePos.
+        :raise: ValueError if n is too large (either positive or
+                    negative) to be added to the SourcePos.
+        """
         if n < 0:
             return self - abs(n)
         original_n = n
@@ -860,6 +894,15 @@ class SourcePos:
                 f'{original_n} is too large.')
 
     def __sub__(self, n: int) -> 'SourcePos':
+        """
+        Produces a new SourcePos object that has a char index n lower
+        than the SourcePos on which this method was called.
+        
+        :param n: int
+        :return: newly created SourcePos.
+        :raise: ValueError if n is too large (either positive or
+                    negative) to be subtracted from the SourcePos.
+        """
         if n < 0:
             return self + abs(n)
         original_n = n
@@ -1247,6 +1290,10 @@ class Chunk:
         return containing_line.s(self.form)[line_col]
 
     def __str__(self):
+        """
+        Gets str content of chunk.
+        :return: str
+        """
         s = ''
         if self.first_line is self.last_line:
             line_s = self.first_line.s(self.form)
@@ -1307,6 +1354,19 @@ class Chunk:
                 yield self.chunk.file_content.lines[i]
 
 
+def join_hashes(hash_iterable: ty.Iterable[int]) -> int:
+    """
+    Join hashes of the passed iterable.
+    :param hash_iterable: Iterable[int]
+    :return: int
+    """
+    prime = 31
+    result: int = 1
+    for sub_hash in hash_iterable:
+        result = (result * prime + sub_hash) % sys.maxsize
+    return result
+
+
 def iter_hash(gen: ty.Iterable[str], accept_none: bool = False) -> int:
     """
     Hashes content of iterable.
@@ -1319,14 +1379,13 @@ def iter_hash(gen: ty.Iterable[str], accept_none: bool = False) -> int:
     :rtype: int
     :raises ValueError if None is received and accept_none is False.
     """
-    prime = 31
-    result: int = 1
-    for s in gen:
-        if not accept_none and s is None:
-            raise ValueError(
-                'None received. Enable accept_none if this is expected.')
-        s_hash = int(hashlib.md5(s.encode()).hexdigest(), 16)
-        result = (result * prime + s_hash) % sys.maxsize
+    def hash_generator():
+        for s in gen:
+            if not accept_none and s is None:
+                raise ValueError(
+                    'None received. Enable accept_none if this is expected.')
+            yield int(hashlib.md5(s.encode()).hexdigest(), 16)
+    result = join_hashes(hash_generator())
     assert isinstance(result, int)
     return result
 
@@ -1498,6 +1557,10 @@ class Component:
 
     @property
     def tags(self) -> ty.Set[str]:
+        """
+        Finds tags that have been assigned to this component.
+        :return: Set of tag strings.
+        """
         if self._tags is None:
             if len(self.chunk.lines) == 1:
                 return parse_tags(
@@ -1574,6 +1637,12 @@ class Component:
         return []
 
     def _find_tokens(self) -> ty.List[str]:
+        """
+        Method used to find tokens for return by 'tokens' property.
+        May be overridden in subclasses without having to re-implement
+        the full 'tokens' property.
+        :return: List[str]
+        """
         return self.chunk.tokenize()
 
 
@@ -1615,17 +1684,6 @@ class Block(Component):
                     self._sub_components.append(component)
                     pos = component.chunk.end
         return self._sub_components
-
-    @property
-    def tags(self) -> ty.Set[str]:
-        if self._tags is None:
-            start_line = self.chunk.start.line_i
-            end_line = self.chunk.end.line_i
-            for line_i in range(start_line, end_line):
-                # Only adopt tags from lines without some other statement
-                pass  # TODO
-
-        return self._tags
 
     def __repr__(self) -> str:
         return f'Block[{self.chunk.bounds_description}]'
@@ -1973,7 +2031,10 @@ def find_in_scope(sub_str: str, chunk: 'Chunk') -> 'SourcePos':
     while True:
         if s.endswith(sub_str):
             return pos - len(sub_str)
-        c = chunk[pos]
+        try:
+            c = chunk[pos]
+        except IndexError:
+            raise KeyError(f'{sub_str} not found in {chunk}')
         if (c in BRACKETS or c in '\'"') and (s + c).endswith(sub_str):
             return pos - (len(sub_str) - 1)
         if c in BRACKETS:
@@ -1984,10 +2045,7 @@ def find_in_scope(sub_str: str, chunk: 'Chunk') -> 'SourcePos':
             s = c
         else:
             s += c
-        try:
-            pos += 1
-        except ValueError:
-            raise KeyError(f'{sub_str} not found in {chunk}')
+        pos += 1
 
 
 def scope_tokens(chunk: 'Chunk', regex: str = r"[\w0-9]+") -> ty.List[str]:
@@ -2039,6 +2097,18 @@ def update_content(
 
 
 def parse_tags(s: str) -> ty.Set[str]:
+    """
+    Parse passed string for tags (ie: 'ZEN(shallow)' ) within 
+    passed string. 
+    
+    Intended to be passed raw line strings. 
+    
+    Does not look within block comments, as it is expected that all
+    tags are in comments following a statement, or within a block.
+    
+    :param s: Line str to search for tags.
+    :return: Set[str]
+    """
     if '//' not in s or 'ZEN(' not in s:
         return set()
     comment = s[s.find('//') + 2:]
