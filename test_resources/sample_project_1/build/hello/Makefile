@@ -48,10 +48,10 @@ RM = /usr/local/bin/cmake -E remove -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/user0/PycharmProjects/zen/test_resources/sample_project_1
+CMAKE_SOURCE_DIR = /home/user/src/sample_project_1
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/user0/PycharmProjects/zen/test_resources/sample_project_1/build
+CMAKE_BINARY_DIR = /home/user/src/sample_project_1/build
 
 #=============================================================================
 # Targets provided globally by CMake.
@@ -80,14 +80,14 @@ edit_cache/fast: edit_cache
 
 # The main all target
 all: cmake_check_build_system
-	cd /home/user0/PycharmProjects/zen/test_resources/sample_project_1/build && $(CMAKE_COMMAND) -E cmake_progress_start /home/user0/PycharmProjects/zen/test_resources/sample_project_1/build/CMakeFiles /home/user0/PycharmProjects/zen/test_resources/sample_project_1/build/hello/CMakeFiles/progress.marks
-	cd /home/user0/PycharmProjects/zen/test_resources/sample_project_1/build && $(MAKE) -f CMakeFiles/Makefile2 hello/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/user0/PycharmProjects/zen/test_resources/sample_project_1/build/CMakeFiles 0
+	cd /home/user/src/sample_project_1/build && $(CMAKE_COMMAND) -E cmake_progress_start /home/user/src/sample_project_1/build/CMakeFiles /home/user/src/sample_project_1/build/hello/CMakeFiles/progress.marks
+	cd /home/user/src/sample_project_1/build && $(MAKE) -f CMakeFiles/Makefile2 hello/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/user/src/sample_project_1/build/CMakeFiles 0
 .PHONY : all
 
 # The main clean target
 clean:
-	cd /home/user0/PycharmProjects/zen/test_resources/sample_project_1/build && $(MAKE) -f CMakeFiles/Makefile2 hello/clean
+	cd /home/user/src/sample_project_1/build && $(MAKE) -f CMakeFiles/Makefile2 hello/clean
 .PHONY : clean
 
 # The main clean target
@@ -97,22 +97,22 @@ clean/fast: clean
 
 # Prepare targets for installation.
 preinstall: all
-	cd /home/user0/PycharmProjects/zen/test_resources/sample_project_1/build && $(MAKE) -f CMakeFiles/Makefile2 hello/preinstall
+	cd /home/user/src/sample_project_1/build && $(MAKE) -f CMakeFiles/Makefile2 hello/preinstall
 .PHONY : preinstall
 
 # Prepare targets for installation.
 preinstall/fast:
-	cd /home/user0/PycharmProjects/zen/test_resources/sample_project_1/build && $(MAKE) -f CMakeFiles/Makefile2 hello/preinstall
+	cd /home/user/src/sample_project_1/build && $(MAKE) -f CMakeFiles/Makefile2 hello/preinstall
 .PHONY : preinstall/fast
 
 # clear depends
 depend:
-	cd /home/user0/PycharmProjects/zen/test_resources/sample_project_1/build && $(CMAKE_COMMAND) -H$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
+	cd /home/user/src/sample_project_1/build && $(CMAKE_COMMAND) -H$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
 .PHONY : depend
 
 # Convenience name for target.
 hello/CMakeFiles/hello.dir/rule:
-	cd /home/user0/PycharmProjects/zen/test_resources/sample_project_1/build && $(MAKE) -f CMakeFiles/Makefile2 hello/CMakeFiles/hello.dir/rule
+	cd /home/user/src/sample_project_1/build && $(MAKE) -f CMakeFiles/Makefile2 hello/CMakeFiles/hello.dir/rule
 .PHONY : hello/CMakeFiles/hello.dir/rule
 
 # Convenience name for target.
@@ -122,7 +122,7 @@ hello: hello/CMakeFiles/hello.dir/rule
 
 # fast build rule for target.
 hello/fast:
-	cd /home/user0/PycharmProjects/zen/test_resources/sample_project_1/build && $(MAKE) -f hello/CMakeFiles/hello.dir/build.make hello/CMakeFiles/hello.dir/build
+	cd /home/user/src/sample_project_1/build && $(MAKE) -f hello/CMakeFiles/hello.dir/build.make hello/CMakeFiles/hello.dir/build
 .PHONY : hello/fast
 
 hello.o: hello.cc.o
@@ -131,7 +131,7 @@ hello.o: hello.cc.o
 
 # target to build an object file
 hello.cc.o:
-	cd /home/user0/PycharmProjects/zen/test_resources/sample_project_1/build && $(MAKE) -f hello/CMakeFiles/hello.dir/build.make hello/CMakeFiles/hello.dir/hello.cc.o
+	cd /home/user/src/sample_project_1/build && $(MAKE) -f hello/CMakeFiles/hello.dir/build.make hello/CMakeFiles/hello.dir/hello.cc.o
 .PHONY : hello.cc.o
 
 hello.i: hello.cc.i
@@ -140,7 +140,7 @@ hello.i: hello.cc.i
 
 # target to preprocess a source file
 hello.cc.i:
-	cd /home/user0/PycharmProjects/zen/test_resources/sample_project_1/build && $(MAKE) -f hello/CMakeFiles/hello.dir/build.make hello/CMakeFiles/hello.dir/hello.cc.i
+	cd /home/user/src/sample_project_1/build && $(MAKE) -f hello/CMakeFiles/hello.dir/build.make hello/CMakeFiles/hello.dir/hello.cc.i
 .PHONY : hello.cc.i
 
 hello.s: hello.cc.s
@@ -149,7 +149,7 @@ hello.s: hello.cc.s
 
 # target to generate assembly for a file
 hello.cc.s:
-	cd /home/user0/PycharmProjects/zen/test_resources/sample_project_1/build && $(MAKE) -f hello/CMakeFiles/hello.dir/build.make hello/CMakeFiles/hello.dir/hello.cc.s
+	cd /home/user/src/sample_project_1/build && $(MAKE) -f hello/CMakeFiles/hello.dir/build.make hello/CMakeFiles/hello.dir/hello.cc.s
 .PHONY : hello.cc.s
 
 # Help Target
@@ -175,6 +175,6 @@ help:
 # No rule that depends on this can have commands that come from listfiles
 # because they might be regenerated.
 cmake_check_build_system:
-	cd /home/user0/PycharmProjects/zen/test_resources/sample_project_1/build && $(CMAKE_COMMAND) -H$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 0
+	cd /home/user/src/sample_project_1/build && $(CMAKE_COMMAND) -H$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 0
 .PHONY : cmake_check_build_system
 

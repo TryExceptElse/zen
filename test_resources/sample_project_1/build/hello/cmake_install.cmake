@@ -1,4 +1,4 @@
-# Install script for directory: /home/user0/PycharmProjects/zen/test_resources/sample_project_1/hello
+# Install script for directory: /home/user/src/sample_project_1/hello
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

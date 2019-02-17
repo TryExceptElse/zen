@@ -1,6 +1,6 @@
-/home/user0/PycharmProjects/zen/test_resources/sample_project_1/build/CMakeFiles/rebuild_cache.dir
-/home/user0/PycharmProjects/zen/test_resources/sample_project_1/build/CMakeFiles/edit_cache.dir
-/home/user0/PycharmProjects/zen/test_resources/sample_project_1/build/CMakeFiles/sample_target.dir
-/home/user0/PycharmProjects/zen/test_resources/sample_project_1/build/hello/CMakeFiles/rebuild_cache.dir
-/home/user0/PycharmProjects/zen/test_resources/sample_project_1/build/hello/CMakeFiles/edit_cache.dir
-/home/user0/PycharmProjects/zen/test_resources/sample_project_1/build/hello/CMakeFiles/hello.dir
+/home/user/src/sample_project_1/build/CMakeFiles/rebuild_cache.dir
+/home/user/src/sample_project_1/build/CMakeFiles/edit_cache.dir
+/home/user/src/sample_project_1/build/CMakeFiles/sample_target.dir
+/home/user/src/sample_project_1/build/hello/CMakeFiles/rebuild_cache.dir
+/home/user/src/sample_project_1/build/hello/CMakeFiles/edit_cache.dir
+/home/user/src/sample_project_1/build/hello/CMakeFiles/hello.dir

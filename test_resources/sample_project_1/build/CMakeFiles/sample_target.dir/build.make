@@ -43,10 +43,10 @@ RM = /usr/local/bin/cmake -E remove -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/user0/PycharmProjects/zen/test_resources/sample_project_1
+CMAKE_SOURCE_DIR = /home/user/src/sample_project_1
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/user0/PycharmProjects/zen/test_resources/sample_project_1/build
+CMAKE_BINARY_DIR = /home/user/src/sample_project_1/build
 
 # Include any dependencies generated for this target.
 include CMakeFiles/sample_target.dir/depend.make
@@ -59,16 +59,16 @@ include CMakeFiles/sample_target.dir/flags.make
 
 CMakeFiles/sample_target.dir/sample.cc.o: CMakeFiles/sample_target.dir/flags.make
 CMakeFiles/sample_target.dir/sample.cc.o: ../sample.cc
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/user0/PycharmProjects/zen/test_resources/sample_project_1/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/sample_target.dir/sample.cc.o"
-	/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/sample_target.dir/sample.cc.o -c /home/user0/PycharmProjects/zen/test_resources/sample_project_1/sample.cc
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/user/src/sample_project_1/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/sample_target.dir/sample.cc.o"
+	/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/sample_target.dir/sample.cc.o -c /home/user/src/sample_project_1/sample.cc
 
 CMakeFiles/sample_target.dir/sample.cc.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/sample_target.dir/sample.cc.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/user0/PycharmProjects/zen/test_resources/sample_project_1/sample.cc > CMakeFiles/sample_target.dir/sample.cc.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/user/src/sample_project_1/sample.cc > CMakeFiles/sample_target.dir/sample.cc.i
 
 CMakeFiles/sample_target.dir/sample.cc.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/sample_target.dir/sample.cc.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/user0/PycharmProjects/zen/test_resources/sample_project_1/sample.cc -o CMakeFiles/sample_target.dir/sample.cc.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/user/src/sample_project_1/sample.cc -o CMakeFiles/sample_target.dir/sample.cc.s
 
 CMakeFiles/sample_target.dir/sample.cc.o.requires:
 
@@ -83,16 +83,16 @@ CMakeFiles/sample_target.dir/sample.cc.o.provides.build: CMakeFiles/sample_targe
 
 CMakeFiles/sample_target.dir/main.cc.o: CMakeFiles/sample_target.dir/flags.make
 CMakeFiles/sample_target.dir/main.cc.o: ../main.cc
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/user0/PycharmProjects/zen/test_resources/sample_project_1/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object CMakeFiles/sample_target.dir/main.cc.o"
-	/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/sample_target.dir/main.cc.o -c /home/user0/PycharmProjects/zen/test_resources/sample_project_1/main.cc
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/home/user/src/sample_project_1/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object CMakeFiles/sample_target.dir/main.cc.o"
+	/usr/bin/c++  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/sample_target.dir/main.cc.o -c /home/user/src/sample_project_1/main.cc
 
 CMakeFiles/sample_target.dir/main.cc.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/sample_target.dir/main.cc.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/user0/PycharmProjects/zen/test_resources/sample_project_1/main.cc > CMakeFiles/sample_target.dir/main.cc.i
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/user/src/sample_project_1/main.cc > CMakeFiles/sample_target.dir/main.cc.i
 
 CMakeFiles/sample_target.dir/main.cc.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/sample_target.dir/main.cc.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/user0/PycharmProjects/zen/test_resources/sample_project_1/main.cc -o CMakeFiles/sample_target.dir/main.cc.s
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/user/src/sample_project_1/main.cc -o CMakeFiles/sample_target.dir/main.cc.s
 
 CMakeFiles/sample_target.dir/main.cc.o.requires:
 
@@ -118,7 +118,7 @@ sample_target: CMakeFiles/sample_target.dir/main.cc.o
 sample_target: CMakeFiles/sample_target.dir/build.make
 sample_target: hello/libhello.a
 sample_target: CMakeFiles/sample_target.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/user0/PycharmProjects/zen/test_resources/sample_project_1/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Linking CXX executable sample_target"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/user/src/sample_project_1/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Linking CXX executable sample_target"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/sample_target.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.
@@ -136,6 +136,6 @@ CMakeFiles/sample_target.dir/clean:
 .PHONY : CMakeFiles/sample_target.dir/clean
 
 CMakeFiles/sample_target.dir/depend:
-	cd /home/user0/PycharmProjects/zen/test_resources/sample_project_1/build && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /home/user0/PycharmProjects/zen/test_resources/sample_project_1 /home/user0/PycharmProjects/zen/test_resources/sample_project_1 /home/user0/PycharmProjects/zen/test_resources/sample_project_1/build /home/user0/PycharmProjects/zen/test_resources/sample_project_1/build /home/user0/PycharmProjects/zen/test_resources/sample_project_1/build/CMakeFiles/sample_target.dir/DependInfo.cmake --color=$(COLOR)
+	cd /home/user/src/sample_project_1/build && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /home/user/src/sample_project_1 /home/user/src/sample_project_1 /home/user/src/sample_project_1/build /home/user/src/sample_project_1/build /home/user/src/sample_project_1/build/CMakeFiles/sample_target.dir/DependInfo.cmake --color=$(COLOR)
 .PHONY : CMakeFiles/sample_target.dir/depend
 

@@ -39,9 +39,7 @@ TEST_RESOURCES_PATH = Path(ROOT, 'test_resources')
 
 SAMPLE_PROJECT_PATH = Path(TEST_RESOURCES_PATH, 'sample_project_1')
 SAMPLE_BUILD_DIR = os.path.join(SAMPLE_PROJECT_PATH, 'build')
-FAKE_PROJECT_PATH = Path(
-    '/', 'home', 'user0', 'PycharmProjects', 'zen', 'test_resources',
-    'sample_project_1')
+FAKE_PROJECT_PATH = Path('/', 'home', 'user', 'src', 'sample_project_1')
 HELLO_H_PATH = Path(os.path.join(FAKE_PROJECT_PATH, 'hello', 'hello.h'))
 HELLO_CC_PATH = Path(os.path.join(FAKE_PROJECT_PATH, 'hello', 'hello.cc'))
 SAMPLE_H_PATH = Path(os.path.join(FAKE_PROJECT_PATH, 'sample.h'))

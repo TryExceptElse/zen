@@ -1,4 +1,4 @@
-# Install script for directory: /home/user0/PycharmProjects/zen/test_resources/sample_project_1
+# Install script for directory: /home/user/src/sample_project_1
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -39,7 +39,7 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for each subdirectory.
-  include("/home/user0/PycharmProjects/zen/test_resources/sample_project_1/build/hello/cmake_install.cmake")
+  include("/home/user/src/sample_project_1/build/hello/cmake_install.cmake")
 
 endif()
 
@@ -51,5 +51,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "/home/user0/PycharmProjects/zen/test_resources/sample_project_1/build/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "/home/user/src/sample_project_1/build/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
