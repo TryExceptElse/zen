@@ -512,17 +512,33 @@ class CompileObject:
 
             def used_components(
                     source: 'SourceFile') -> ty.Iterable['Component']:
+                """
+                Yields used components from the passed SourceFile.
+                :param source: SourceFile
+                :return: Iterable[Component]
+                """
                 content = source.content
                 block = content.component
                 for component in block.sub_components:
                     yield from recurse_component(component)
 
             def used_chunk_strings(source: 'SourceFile') -> ty.Iterable[str]:
+                """
+                Yields the chunk strings of used components within the
+                passed header or definition file.
+                :param source: SourceFile
+                :return: Iterable[str]
+                """
                 for component in used_components(source):
                     for chunk in component.exposed_content:
                         yield str(chunk).strip()
 
             def source_hashes() -> ty.Iterable[int]:
+                """
+                Yields a hash value for each source (header or
+                definition) used by the CompileObject.
+                :return: Iterable[int]
+                """
                 for source in self.sources:
                     if source.is_header:
                         yield iter_hash(used_chunk_strings(source))
@@ -596,6 +612,10 @@ class SourceFile:
 
     @classmethod
     def clear(cls) -> None:
+        """
+        Clears all source file instances that have been created.
+        :return: None
+        """
         cls._source_files.clear()
 
     def substantive_changes(self, cache: ty.Dict[str, int]) -> bool:
@@ -716,13 +736,29 @@ class SourceContent:
         self._stripped_comments = True
 
     def start_pos(self, form: 'SourceForm') -> 'SourcePos':
+        """
+        Gets SourcePos pointing to the beginning of the SourceContent.
+        :param form: SourceForm for the produced SourcePos.
+        :return: SourcePos
+        """
         return SourcePos(self, 0, 0, form)
 
     def end_pos(self, form: 'SourceForm') -> 'SourcePos':
+        """
+        Gets SourcePos pointing to the end of the SourceContent.
+        :param form: SourceForm for the produced SourcePos.
+        :return: SourcePos
+        """
         return SourcePos(self, -1, len(self.lines[-1].s(form)), form)
 
     @property
     def has_uncommented(self) -> bool:
+        """
+        Whether SourceContent's lines' uncommented forms have been
+        produced and stored.
+        :return: bool which is True if lines' uncommented forms have
+                    been produced and stored.
+        """
         return self._stripped_comments
 
     @property
@@ -798,6 +834,14 @@ class Line:
 
     @property
     def stripped(self) -> str:
+        """
+        Gets form of line with all unneeded whitespace removed.
+        Whitespace that separates tokens in the line are left
+        in place.
+
+        :return: str of line's content without comments or
+                    extra whitespace.
+        """
         s = ' '.join(self.uncommented.split())
         if self.uncommented.endswith('\n'):
             s += '\n'
@@ -829,6 +873,12 @@ class Line:
 
 
 class SourceForm(enum.Enum):
+    """
+    Enum that indicates a form of source content.
+
+    Used by SourcePos, Chunk, and elsewhere to indicate what form of
+    the source code they represent.
+    """
     RAW = 1
     UNCOMMENTED = 2
     STRIPPED = 3
@@ -939,6 +989,16 @@ class SourcePos:
         return hash((self.file_content, self.line_i, self.col_i, self.form))
 
     def __eq__(self, other) -> bool:
+        """
+        Compares SourcePos to another.
+
+        Source positions are considered equal if they point to the same
+        position of the same file content, and have the same form as
+        each other (raw, uncommented, or stripped).
+
+        :param other: SourcePos to compare with.
+        :return: True if both SourcePos are equivalent.
+        """
         try:
             return all((
                 self.file_content == other.file_content,
@@ -951,6 +1011,11 @@ class SourcePos:
 
     @property
     def next_line_pos(self) -> 'SourcePos':
+        """
+        Returns a SourcePos pointing to the first character in the next
+        line following the SourcePos.
+        :return: SourcePos pointing to beginning of the next line.
+        """
         return SourcePos(self.file_content, self.line_i + 1, 0, self.form)
 
     def _normalize_line_i(self, i: int) -> int:
@@ -1077,9 +1142,26 @@ class Chunk:
         return SourcePos(self.file_content, line_i, col_i, self.form)
 
     def line(self, pos: 'SourcePos') -> 'Line':
+        """
+        Returns the line within the Chunk that contains the passed
+        source pos.
+
+        The column index of the passed SourcePos is ignored.
+
+        :param pos: SourcePos which points to a position within the
+                    line to be returned.
+        :return: Line which contains the passed SourcePos.
+        """
         return self.file_content.lines[pos.line_i]
 
     def tokenize(self, regex: str = r"[\w0-9]+") -> ty.List[str]:
+        """
+        Produces a list of the tokens contained within the Chunk.
+        :param regex: If passed, the regex that will be used to
+                    find chunks.
+        :return: list of token str.
+        :rtype List[str]
+        """
         tokens: ty.List[str] = []
         if self.start.line_i == self.end.line_i:
             return re.findall(regex, str(self))
