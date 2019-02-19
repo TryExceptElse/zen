@@ -631,10 +631,21 @@ class SourceFile:
             return True
 
     def remember(self, cache: ty.Dict[str, int]) -> None:
+        """
+        Stores information about the current form of the source file,
+        so that changes may be detected.
+
+        :param cache: cache dictionary.
+        :return: None
+        """
         cache[self.hex] = self.stripped_hash
 
     @property
     def is_header(self) -> bool:
+        """
+        Returns whether or not SourceFile is a header.
+        :return: bool true if SourceFile is a header file.
+        """
         return self.path.suffix in HEADER_EXT
 
     @property
@@ -1129,7 +1140,7 @@ class Chunk:
         :param line_i: int line index in source.
                     Not relative to start of Chunk.
         :param col_i: int col index or position keyword ('end')
-                    Not relative to start of Chunk, if on first line.
+                    Always relative to line start, not start of Chunk.
         :return: SourcePos for the same source file and form as Chunk,
                     and with the passed line and column indices.
         :rtype: SourcePos
@@ -1208,6 +1219,18 @@ class Chunk:
             pos += 1
 
     def find_quote_end(self, pos: 'SourcePos') -> 'SourcePos':
+        """
+        Finds the end quote char of the string that begins at the
+        passed position.
+
+        Escaped quotes are skipped, and end quote must match the type
+        of quote char which is at the passed position in the chunk.
+
+        :param pos: SourcePos indicating a quote char that
+                    begins a string.
+        :return: SourcePos indicating the end of the string.
+        :rtype SourcePos
+        """
         escaped = False
         end_char = self[pos]
         if end_char not in '\'"':
@@ -1225,6 +1248,13 @@ class Chunk:
                 return pos + i + 1
 
     def strip(self) -> 'Chunk':
+        """
+        Returns a new chunk that has had leading and trailing
+        whitespace removed.
+
+        :return: Chunk without leading and trailing whitespace.
+        :rtype Chunk
+        """
         for i, c in enumerate(self):
             if c not in string.whitespace:
                 start = i
@@ -1257,6 +1287,12 @@ class Chunk:
 
     @property
     def lines(self) -> 'Lines':
+        """
+        Returns lines object which serves as a utility for accessing
+        lines within Chunk.
+        :return: Lines object
+        :rtype Lines
+        """
         return self.Lines(self)
 
     @property
@@ -1748,6 +1784,10 @@ class Block(Component):
 
     @property
     def sub_components(self) -> ty.List['Component']:
+        """
+        Gets collection of other components contained within
+        the Component.
+        """
         if self._sub_components is None:
             self._sub_components = []
             pos = self.chunk.start
@@ -2229,7 +2269,13 @@ class Construct:
 #######################################################################
 
 
-def verbose(*args, **kwargs):
+def verbose(*args, **kwargs) -> None:
+    """
+    Prints message if verbose_opt global has been set.
+    :param args: args passed to print function.
+    :param kwargs: kwargs passed to print function.
+    :return: None
+    """
     if verbose_opt:
         print(*args, **kwargs)
 
