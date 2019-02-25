@@ -90,6 +90,10 @@ class BuildDir:
     CACHE_NAME = 'zen_cache'
 
     def __init__(self, path: str) -> None:
+        """
+        Initialize BuildDir instance for a cmake build directory.
+        :param path: Path-like pointing to build directory.
+        """
         self.path = Path(path)
         self.targets = self._find_targets()
         self.targets_by_path = {
@@ -186,6 +190,17 @@ class Target:
         self.status = Status.UNCHECKED
 
     def meditate(self) -> None:
+        """
+        Determines whether Target rebuild can be avoided based on
+        analysis of changes in the source code.
+
+        If it is determined that changes have been made to the target
+        that do not change the observable behavior of programs
+        conforming to basic expectations, then target re-compilation
+        will be avoided.
+
+        :return: None
+        """
         if self.status != Status.UNCHECKED:
             return  # Already meditated.
 
@@ -1092,6 +1107,10 @@ class Chunk:
         self._index_range: ty.Optional[range] = None
 
     def __len__(self) -> int:
+        """
+        Gets length of Chunk in chars.
+        :return: Number of chars in Chunk.
+        """
         return self.index_range.stop
 
     def __getitem__(
