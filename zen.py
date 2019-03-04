@@ -89,7 +89,7 @@ class BuildDir:
 
     CACHE_NAME = 'zen_cache'
 
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: os.PathLike) -> None:
         """
         Initialize BuildDir instance for a cmake build directory.
         :param path: Path-like pointing to build directory.
