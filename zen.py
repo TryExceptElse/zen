@@ -326,6 +326,14 @@ class Target:
         return path, target_type
 
     def _find_dependencies(self) -> ty.Set[Path]:
+        """
+        Produces set of dependency files that are relied upon by
+        this target.
+
+        :return: set of Path objects each pointing to a file while this
+                    target depends on.
+        :rtype: Set[Path]
+        """
         build_make_path = Path(self.path, 'build.make')
         paths = set()
         with build_make_path.open() as f:
@@ -707,6 +715,9 @@ class SourceFile:
 
 
 class SourceContent:
+    """
+    Class representing the content of a header or definition file.
+    """
     path: Path
     lines: ty.List['Line']
     _raw_hash: ty.Optional[int]
@@ -1045,6 +1056,18 @@ class SourcePos:
         return SourcePos(self.file_content, self.line_i + 1, 0, self.form)
 
     def _normalize_line_i(self, i: int) -> int:
+        """
+        Produces a 'conventional' non-negative index from the
+        passed int.
+
+        If passed integer is negative, an index relative to the first
+        line of the file is produced.
+
+        :param i: int index between -len(file_content.lines) and
+                    len(file_content.lines) - 1.
+        :return: int index between 0 and len(file_content.lines) - 1.
+        :raises IndexError if passed integer is outside valid range.
+        """
         original_i = i
         lines = self.file_content.lines
         if i < 0:
@@ -1056,6 +1079,17 @@ class SourcePos:
         return i
 
     def _normalize_col_i(self, i: int) -> int:
+        """
+        Produces a 'conventional' non-negative index from the
+        passed column index.
+
+        If passed integer is negative, a positive index relative to
+        column 0 is produced.
+
+        :param i: int index between (-line len) and (line len - 1).
+        :return: int index between 0 and line len - 1.
+        :raises IndexError if passed integer is outside valid range.
+        """
         original_i = i
         line = self.file_content.lines[self.line_i]
         line_len = len(line.s(self.form))
@@ -1335,10 +1369,20 @@ class Chunk:
 
     @property
     def start(self) -> 'SourcePos':
+        """
+        Returns a SourcePos pointing to the first character in
+        the Chunk.
+        :return: SourcePos
+        """
         return self._start
 
     @property
     def end(self) -> 'SourcePos':
+        """
+        Returns a SourcePos pointing to the last character in
+        the Chunk.
+        :return: SourcePos
+        """
         return self._end
 
     @property
