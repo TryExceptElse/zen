@@ -1741,6 +1741,7 @@ class Component:
         """
         Finds tags that have been assigned to this component.
         :return: Set of tag strings.
+        :rtype: Set[str]
         """
         if self._tags is None:
             if len(self.chunk.lines) == 1:

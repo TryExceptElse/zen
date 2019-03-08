@@ -477,6 +477,11 @@ class TestSourceContent(TestCase):
         content.strip_comments()
         self.assertEqual('    this is a line  ', content.lines[0].uncommented)
 
+    def test_uncomment_line_handles_line_without_comment_correctly(self):
+        content = zen.SourceContent('    a = foo(b);')
+        content.strip_comments()
+        self.assertEqual('    a = foo(b);', content.lines[0].uncommented)
+
     def test_removing_line_comment_does_not_remove_newline_char(self):
         content = zen.SourceContent('    line  // with newline char\n')
         content.strip_comments()
