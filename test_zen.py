@@ -418,6 +418,22 @@ class TestBuildDir(TestCase):
         self.assertEqual(_out['full_build'], first_out)
         self.assertEqual(_out['no_rebuild'], second_out)
 
+    def test_lt_sign_is_parsed_correctly(self):
+        first_out, second_out, last_out = self.get_output_from_change(
+            # Add definition
+            after_setup=lambda project_dir: shutil.copy(
+                Path(TEST_RESOURCES_PATH, 'lt_sample.h'),
+                Path(project_dir, 'sample.h')
+            ),
+            change_source=lambda project_dir: shutil.copy(
+                Path(TEST_RESOURCES_PATH, 'herring_lt_sample.h'),
+                Path(project_dir, 'sample.h')
+            )
+        )
+        self.assertEqual(_out['full_build'], first_out)
+        self.assertEqual(_out['no_rebuild'], second_out)
+        self.assertEqual(_out['no_rebuild'], last_out)
+
 
 class TestTarget(TestCase):
     def tearDown(self):

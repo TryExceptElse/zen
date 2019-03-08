@@ -485,6 +485,9 @@ class CompileObject:
         try:
             cached_hash = self.build_dir.hash_cache[self.hex]
         except KeyError:
+            # If file not in cache, it either didn't exist at the
+            # time of the last run, or there was a parsing error.
+            # Either way, assume the file has changed significantly.
             return True
         return self.used_content_hash != cached_hash
 
@@ -1249,13 +1252,21 @@ class Chunk:
             tokens += re.findall(regex, s)
         return tokens
 
-    def find_pair(self, start_pos: 'SourcePos') -> 'SourcePos':
+    def find_pair(
+            self,
+            start_pos: 'SourcePos',
+            allow_semicolon: bool = True
+    ) -> 'SourcePos':
         """
         Finds paired closing bracket for the bracket which exists at
         the passed start position.
 
         :param start_pos: SourcePos
+        :param allow_semicolon: if False, a ParsingException is thrown
+                    upon encountering a semi-colon before the
+                    close-bracket.
         :return: SourcePos
+        :raise ParsingException if Unexpected Syntax is encountered.
         """
         if not self[start_pos] in BRACKETS.keys():
             raise ValueError(
@@ -1278,6 +1289,10 @@ class Chunk:
                 depth -= 1
                 if depth == 0:
                     return pos
+            if c == ';' and not allow_semicolon:
+                raise ParsingException(
+                    f'No end to bracket at {start_pos} found in {self}, '
+                    f'before semicolon was encountered at {pos}')
             elif c in '\'"':
                 pos = sub_chunk.find_quote_end(pos)
             pos += 1
@@ -1681,8 +1696,11 @@ class Component:
                 pass
             elif c == '<' and scope != ScopeType.FUNC:
                 # If outside function, '<'
-                pos = chunk.find_pair(pos)
-                s += '<>'  # Leave out template internals.
+                try:
+                    pos = chunk.find_pair(pos, allow_semicolon=False)
+                    s += '<>'  # Leave out template internals.
+                except ParsingException:
+                    pass
             elif c == '(':
                 pos = chunk.find_pair(pos)
                 s += '()'  # Leave out argument internals.
