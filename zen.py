@@ -31,7 +31,6 @@ from pathlib import Path
 import re
 import string
 import subprocess as sub
-import sys
 import time
 import typing as ty
 
@@ -1544,7 +1543,7 @@ def join_hashes(hash_iterable: ty.Iterable[int]) -> int:
     prime = 31
     result: int = 1
     for sub_hash in hash_iterable:
-        result = (result * prime + sub_hash) % sys.maxsize
+        result = (result * prime + sub_hash) % (2 ** 127 - 1)
     return result
 
 

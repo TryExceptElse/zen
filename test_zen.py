@@ -1187,10 +1187,8 @@ class TestFindScopeTokens(TestCase):
 class TestIterHash(TestCase):
     def test_hash_is_repeatable(self):
         result: int = zen.iter_hash((s for s in ['a', 'b', 'c']))
-        if sys.maxsize == 2 ** 63 - 1:
-            self.assertEqual(8304879420899386742, result)
-        else:
-            self.assertEqual(2082300178, result)
+        self.assertEqual(158539464831404298579059230396920922247, result)
+
 
 class TestParseTags(TestCase):
     def test_parse_tags(self):
