@@ -407,6 +407,17 @@ class TestBuildDir(TestCase):
         self.assertEqual(_out['no_rebuild'], second_out)
         self.assertEqual(_out['hello_rebuild'], last_out)
 
+    def test_lt_sign_in_global_scope_does_not_break_everything(self):
+        first_out, second_out, last_out = self.get_output_from_change(
+            # Add definition
+            change_source=lambda project_dir: shutil.copy(
+                Path(TEST_RESOURCES_PATH, 'lt_sample.h'),
+                Path(project_dir, 'sample.h')
+            )
+        )
+        self.assertEqual(_out['full_build'], first_out)
+        self.assertEqual(_out['no_rebuild'], second_out)
+
 
 class TestTarget(TestCase):
     def tearDown(self):

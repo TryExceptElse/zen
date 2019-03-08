@@ -441,11 +441,14 @@ class CompileObject:
             self.status = Status.NO_CHANGE
             return
 
-        if self._has_code_changes() and self._has_used_content_change():
+        try:
+            if self._has_code_changes() and self._has_used_content_change():
+                self.status = Status.CHANGED
+            else:
+                self.status = Status.MINOR_CHANGE
+                self.avoid_build()
+        except ParsingException:
             self.status = Status.CHANGED
-        else:
-            self.status = Status.MINOR_CHANGE
-            self.avoid_build()
 
     def remember(self) -> None:
         """
@@ -453,7 +456,13 @@ class CompileObject:
         found the next time zen is run.
         :return: None
         """
-        self.build_dir.hash_cache[self.hex] = self.used_content_hash
+        try:
+            self.build_dir.hash_cache[self.hex] = self.used_content_hash
+        except ParsingException:
+            # It is always ok to not store a file hash.
+            # This simply causes the object to be treated as if it had
+            # never been seen before, as if it were the first build.
+            pass
 
     def _has_code_changes(self) -> bool:
         """
