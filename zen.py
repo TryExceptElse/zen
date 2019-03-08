@@ -482,7 +482,10 @@ class CompileObject:
         :return: True if used content has changed.
         :rtype: bool
         """
-        cached_hash = self.build_dir.hash_cache[self.hex]
+        try:
+            cached_hash = self.build_dir.hash_cache[self.hex]
+        except KeyError:
+            return True
         return self.used_content_hash != cached_hash
 
     def avoid_build(self) -> None:
