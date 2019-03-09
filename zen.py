@@ -1386,6 +1386,11 @@ class Chunk:
 
     @property
     def line_strings(self):
+        """
+        Yields a string for each line in the chunk, containing
+        that line's content in the SourceForm used by the chunk.
+        :return: str Iterator
+        """
         line_s = ''
         for c in self:
             line_s += c
