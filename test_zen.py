@@ -38,15 +38,15 @@ ROOT = Path(os.path.dirname(__file__))
 TEST_RESOURCES_PATH = Path(ROOT, 'test_resources')
 
 SAMPLE_PROJECT_PATH = Path(TEST_RESOURCES_PATH, 'sample_project_1')
-SAMPLE_BUILD_DIR = os.path.join(SAMPLE_PROJECT_PATH, 'build')
+SAMPLE_BUILD_DIR = Path(SAMPLE_PROJECT_PATH, 'build')
 FAKE_PROJECT_PATH = Path(
     '/', 'home', 'user0', 'PycharmProjects', 'zen', 'test_resources',
     'sample_project_1')
-HELLO_H_PATH = Path(os.path.join(FAKE_PROJECT_PATH, 'hello', 'hello.h'))
-HELLO_CC_PATH = Path(os.path.join(FAKE_PROJECT_PATH, 'hello', 'hello.cc'))
-SAMPLE_H_PATH = Path(os.path.join(FAKE_PROJECT_PATH, 'sample.h'))
-SAMPLE_CC_PATH = Path(os.path.join(FAKE_PROJECT_PATH, 'sample.cc'))
-MAIN_CC_PATH = Path(os.path.join(FAKE_PROJECT_PATH, 'main.cc'))
+HELLO_H_PATH = Path(FAKE_PROJECT_PATH, 'hello', 'hello.h')
+HELLO_CC_PATH = Path(FAKE_PROJECT_PATH, 'hello', 'hello.cc')
+SAMPLE_H_PATH = Path(FAKE_PROJECT_PATH, 'sample.h')
+SAMPLE_CC_PATH = Path(FAKE_PROJECT_PATH, 'sample.cc')
+MAIN_CC_PATH = Path(FAKE_PROJECT_PATH, 'main.cc')
 
 TEST_SOURCE_DIR_PATH = Path(TEST_RESOURCES_PATH, 'test_source_dir_1')
 ALTERNATE_SAMPLE_H_PATH = Path(TEST_RESOURCES_PATH, 'alternate_sample.h')
