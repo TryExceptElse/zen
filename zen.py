@@ -349,7 +349,7 @@ class Target:
         Gets modification time of compiled object.
         :return: float time in seconds since epoch.
         """
-        return os.path.getmtime(self.file_path)
+        return self.file_path.stat().st_mtime
 
     @property
     def other_status(self) -> Status:
@@ -361,7 +361,7 @@ class Target:
         :return: Status.NO_CHANGE or Status.CHANGED
         :rtype Status
         """
-        if any(os.path.getmtime(other) > self.m_time for
+        if any(other.stat().st_mtime > self.m_time for
                other in self.other_dependencies):
             return Status.CHANGED
         return Status.NO_CHANGE
@@ -504,7 +504,7 @@ class CompileObject:
         Gets modification time of compiled object.
         :return: float time in seconds since epoch.
         """
-        return os.path.getmtime(self.path.absolute())
+        return self.path.stat().st_mtime
 
     @property
     def sources_modified(self) -> bool:
@@ -691,7 +691,7 @@ class SourceFile:
         Gets modification time of source file.
         :return: float time in seconds since epoch.
         """
-        return os.path.getmtime(self.path.absolute())
+        return self.path.stat().st_mtime
 
     @property
     def content(self) -> 'SourceContent':
