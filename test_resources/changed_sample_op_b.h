@@ -3,6 +3,7 @@
 
 namespace sample {
 
+
 /**
  * Sample class declaration
  */
@@ -11,22 +12,12 @@ class Foo {
   explicit Foo(/*test*/std::vector<int> numbers): numbers_(numbers) {}
 
   void Print() const;
+
+  /** Method with changed definition */
+  std::string operator()() const { return "Not another shrubbery"; }
+
  private:
   std::vector<int> numbers_;
 };
-
-/**
- * Irrelevant, unused class declaration
- */
-class RedHerring {
- public:
-  explicit RedHerring() {}
-
-  /** Method with changed definition */
-  std::string get_shrubbery() const { return "Not another shrubbery"; }
-};
-
-
-static RedHerring herring;
 
 }  // namespace sample

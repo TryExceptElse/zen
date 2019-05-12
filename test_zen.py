@@ -327,6 +327,76 @@ class TestBuildDir(TestCase):
         self.assertEqual(_out['no_rebuild'], second_out)
         self.assertEqual(_out['no_rebuild'], last_out)
 
+    def test_change_in_unused_member_function_does_not_cause_rebuild2(self):
+        first_out, second_out, last_out = self.get_output_from_change(
+            # Add original red herring class.
+            after_setup=lambda project_dir: shutil.copy(
+                Path(TEST_RESOURCES_PATH, 'herring_sample5a.h'),
+                Path(project_dir, 'sample.h')
+            ),
+            # Change red herring class.
+            # Since no substantive changes have been made,
+            # no objects should need to be rebuilt.
+            change_source=lambda project_dir: shutil.copy(
+                Path(TEST_RESOURCES_PATH, 'herring_sample5b.h'),
+                Path(project_dir, 'sample.h')
+            )
+        )
+        self.assertEqual(_out['full_build'], first_out)
+        self.assertEqual(_out['no_rebuild'], second_out)
+        self.assertEqual(_out['no_rebuild'], last_out)
+
+    def test_change_in_used_member_function_causes_rebuild(self):
+
+        def initial_change(project_dir):
+            shutil.copy(
+                Path(TEST_RESOURCES_PATH, 'changed_sample2.cc'),
+                Path(project_dir, 'sample.cc')
+            )
+            shutil.copy(
+                Path(TEST_RESOURCES_PATH, 'changed_sample2a.h'),
+                Path(project_dir, 'sample.h')
+            )
+
+        first_out, second_out, last_out = self.get_output_from_change(
+            # Add original red herring class.
+            after_setup=initial_change,
+            # Change red herring class.
+            # Since no substantive changes have been made,
+            # no objects should need to be rebuilt.
+            change_source=lambda project_dir: shutil.copy(
+                Path(TEST_RESOURCES_PATH, 'changed_sample2b.h'),
+                Path(project_dir, 'sample.h')
+            )
+        )
+        self.assertEqual(_out['full_build'], first_out)
+        self.assertEqual(_out['no_rebuild'], second_out)
+        self.assertEqual(_out['sample_rebuild'], last_out)
+
+    def test_change_in_any_operator_method_causes_rebuild(self):
+        """
+        Because it is difficult to determine whether an operator method
+        is used, it is assumed that any change in an operator method
+        of a class is a significant change and should cause a rebuild.
+        """
+        first_out, second_out, last_out = self.get_output_from_change(
+            # Add original red herring class.
+            after_setup=lambda project_dir: shutil.copy(
+                Path(TEST_RESOURCES_PATH, 'changed_sample_op_a.h'),
+                Path(project_dir, 'sample.h')
+            ),
+            # Change red herring class.
+            # Since no substantive changes have been made,
+            # no objects should need to be rebuilt.
+            change_source=lambda project_dir: shutil.copy(
+                Path(TEST_RESOURCES_PATH, 'changed_sample_op_b.h'),
+                Path(project_dir, 'sample.h')
+            )
+        )
+        self.assertEqual(_out['full_build'], first_out)
+        self.assertEqual(_out['no_rebuild'], second_out)
+        self.assertEqual(_out['sample_rebuild'], last_out)
+
     def test_change_in_unused_function_does_not_cause_rebuild(self):
         first_out, second_out, last_out = self.get_output_from_change(
             # Add original red herring class.
@@ -929,7 +999,6 @@ class TestCppClassForwardDeclaration(TestCase):
 class TestCppClassDefinition(TestCase):
     def get_class_def(self) -> zen.CppClassDefinition:
         with Path(CODE_SAMPLES_PATH, 'sample_class').open() as src_f:
-            # noinspection PyTypeChecker
             content = zen.SourceContent(src_f)
             definition = content.component.sub_components[0]
             self.assertIsInstance(definition, zen.CppClassDefinition)
