@@ -529,6 +529,65 @@ class TestTarget(TestCase):
         self.assertIn(link_file_path, target.other_dependencies)
 
 
+class TestCompileObject(TestCase):
+    temp_dir: ty.Optional[tempfile.TemporaryDirectory]
+    project_dir: Path
+    build_dir: Path
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        """ Creates a project file structure for tests to use. """
+        cls.temp_dir = tempfile.TemporaryDirectory()
+        project_dir = Path(cls.temp_dir.name, 'project')
+        # Copy sources to project dir
+        shutil.copytree(
+            TEST_SOURCE_DIR_PATH.absolute(),
+            project_dir.absolute()
+        )
+        build_dir = Path(project_dir, 'build')
+        build_dir.mkdir()
+
+        # CMake
+        os.chdir(build_dir.absolute())
+        sub.call(['cmake', '..'])
+
+        cls.project_dir = project_dir
+        cls.build_dir = build_dir
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.temp_dir.cleanup()
+
+    def get_compile_object(self):
+        return zen.CompileObject(
+            path=Path(
+                self.build_dir,
+                'CMakeFiles',
+                'sample_target.dir',
+                'main.cc.o'
+            ),
+            sources=[
+                Path(self.project_dir, 'hello', 'hello.h'),
+                Path(self.project_dir, 'main.cc'),
+                Path(self.project_dir, 'sample.h')
+            ],
+            build_dir=zen.BuildDir(self.build_dir)
+        )
+
+    def test_create_constructs(self):
+        compile_object = self.get_compile_object()
+        constructs = compile_object.create_constructs()
+        self.assertEqual(
+            {
+                'hello',  # Declared in hello.h
+                'Foo',  # Declared in sample.h
+                'Print',  # Declared in sample.h
+                'main',  # Declared in main.cc
+            },
+            constructs.keys()
+        )
+
+
 class TestSourceFile(TestCase):
     def tearDown(self):
         zen.clear()
