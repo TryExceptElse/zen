@@ -65,6 +65,9 @@ class TargetType(enum.Enum):
     UNKNOWN = 4
 
 
+IPath = ty.Union[str, Path, os.PathLike]
+
+
 LIB_TYPES = {TargetType.STATIC_LIB, TargetType.SHARED_LIB}
 
 HEADER_EXT = '.h', '.hpp', '.hh', '.hxx'
@@ -88,7 +91,7 @@ class BuildDir:
 
     CACHE_NAME = 'zen_cache'
 
-    def __init__(self, path: os.PathLike) -> None:
+    def __init__(self, path: IPath) -> None:
         """
         Initialize BuildDir instance for a cmake build directory.
         :param path: Path-like pointing to build directory.
