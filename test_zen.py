@@ -1222,3 +1222,56 @@ class TestParseTags(TestCase):
         assert zen.parse_tags('    int i = 0; ') == set()
         assert zen.parse_tags('    int i = 1;  // Some comment') == set()
         assert zen.parse_tags('    int i = 2;  // comment ZEN(foo)') == {'foo'}
+
+
+class TestConstructGraph(TestCase):
+    def test_duplicate_constructs_are_not_created(self):
+        graph = zen.ConstructGraph()
+        a = graph.get('Foo', create=True)
+        b = graph.get('Bar', create=True)
+        c = graph.get('Baz', create=True)
+        d = graph.get('Foo', create=True)
+
+        assert a is d
+        assert a is not b
+        assert b is not c
+        assert len(graph) == 3
+        
+    def test_constructs_are_not_created_if_create_arg_not_set(self):
+        graph = zen.ConstructGraph()
+        self.assertRaises(KeyError, graph.get, 'Foo')
+
+    def test_simple_deps_are_found(self):
+        graph = zen.ConstructGraph()
+
+        graph.get('numbers', create=True).add_content([
+            zen.MiscStatement(
+                zen.SourceContent('std::vector<Foo> numbers = bar.get();')
+            )
+        ])
+        graph.get('Foo', create=True).add_content([
+            zen.MiscStatement(
+                zen.SourceContent('class Foo {};')  # Content unimportant
+            )
+        ])
+        graph.get('Herring0', create=True).add_content([
+            zen.MiscStatement(
+                zen.SourceContent('printf("Red");')  # Content unimportant
+            )
+        ])
+        graph.get('Herring1', create=True).add_content([
+            zen.MiscStatement(
+                zen.SourceContent('printf("Herring");')  # Content unimportant
+            )
+        ])
+        graph.get('bar', create=True).add_content([
+            zen.MiscStatement(
+                zen.SourceContent('std::vector<Foo> get() { return {}; }')
+            )
+        ])
+
+        numbers = graph['numbers']
+
+        assert len(numbers.dependencies) == 2
+        assert graph['Foo'] in numbers.dependencies
+        assert graph['bar'] in numbers.dependencies

@@ -2340,14 +2340,91 @@ def parse_tags(s: str) -> ty.Set[str]:
     return tags
 
 
+#######################################################################
+# Construct Graph
+
+
+class ConstructGraph:
+    """
+    Contains a graph of constructs, for tracking constructs by name,
+    and keeping track of the dependencies between them.
+    """
+    def __init__(self) -> None:
+        """
+        Initialize a new construct graph.
+        """
+        self.constructs: ty.Dict[str, Construct] = {}
+
+    def __getitem__(self, name: str) -> 'Construct':
+        """
+        Gets construct with the passed name.
+        :param name: str name of Construct.
+        :return: Construct
+        :raises: KeyError if no construct with passed name exists.
+        """
+        return self.constructs[name]
+
+    def __len__(self) -> int:
+        """
+        Gets number of constructs in graph.
+        :return: int
+        """
+        return len(self.constructs)
+
+    def __iter__(self) -> ty.Iterable['Construct']:
+        """
+        Iterates over all Constructs in the graph.
+        :return: Iterable[Construct]
+        """
+        yield from self.constructs.values()
+
+    def get(self, name: str, create=False) -> 'Construct':
+        """
+        Gets a construct with the passed name if one exists,
+        otherwise creates one.
+
+        :param name: construct name str.
+        :param create: if True, will create a construct if one does
+                    not exist. Default is False.
+        :return: Construct
+        :raises KeyError if Construct with passed name does not exist and
+                    create argument is False.
+        """
+        try:
+            rv = self[name]
+        except KeyError:
+            if not create:
+                raise
+            rv = self.constructs[name] = Construct(name, graph=self)
+        return rv
+
+    def add(self, construct: 'Construct') -> None:
+        """
+        Add passed construct to graph.
+        :param construct: Construct
+        :return: None
+        """
+        if construct.graph:
+            raise ValueError(f'{construct} already is in a graph.')
+        construct.graph = self
+        self.constructs[construct.name] = construct
+
+    def __repr__(self) -> str:
+        return f'ConstructGraph[len={len(self.constructs)}]'
+
+
 class Construct:
     """
+    Constructs represent the code relating to a specific symbol.
+
+    Classes, functions, and global variables are all examples
+    of Constructs.
     """
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, graph: 'ConstructGraph' = None) -> None:
         self.name = name
-        self.used = False
         self.content: ty.List['Component'] = []
-        self.tags: ty.Set[str] = set()
+        self._content_hash: ty.Optional[int] = None
+        self.graph: ty.Optional['ConstructGraph'] = graph
 
     def add_content(self, content: ty.List['Component']) -> None:
         """
@@ -2357,11 +2434,83 @@ class Construct:
         """
         self.content += content
 
-    def add_tags(self, tags: ty.Set[str]) -> None:
-        self.tags |= tags
+    @property
+    def content_hash(self) -> int:
+        """
+        Gets hash associated with the content of the construct.
+
+        If any functional change is made to the Construct, the hash
+        is expected to change.
+
+        This value will be compared to previous runs in order to
+        determine whether a change has been made.
+
+        :return: int
+        """
+        if self._content_hash is None:
+            self._content_hash = join_hashes(
+                component.chunk.content_hash for component in self.content
+            )
+        return self._content_hash
+
+    @property
+    def dependencies(self) -> ty.Set['Construct']:
+        """
+        Gets Construct dependencies of this Construct.
+
+        This property returns the direct dependencies of this
+        Construct. No recursion occurs.
+
+        :return: Set[Construct]
+        """
+        if not self.graph:
+            raise ValueError(f'{self} does not belong to a graph.')
+
+        deps: ty.Set['Construct'] = set()
+        self._dep_search(self, deps, recurse=False)
+        deps.discard(self)
+        return deps
+
+    @property
+    def recursive_dependencies(self) -> ty.Set['Construct']:
+        """
+        Gets Construct dependencies of this construct recursively.
+        :return: Set[Construct]
+        """
+        if not self.graph:
+            raise ValueError(f'{self} does not belong to a graph.')
+
+        deps = set()
+        self._dep_search(self, deps, recurse=True)  # Adds to deps.
+        deps.remove(self)
+        return deps
+
+    def _dep_search(
+            self,
+            construct: 'Construct',
+            visited: ty.Set['Construct'],
+            recurse: bool
+    ):
+        """
+        Helper function that finds dependency Constructs.
+
+        :param construct: Root construct.
+        :param visited: Set of constructs to which dependencies will be added.
+        :param recurse:
+        :return:
+        """
+        if construct in visited:
+            return
+        for component in construct.content:
+            for dep in component.used_constructs(
+                    self.graph.constructs).values():
+                if dep not in visited:
+                    visited.add(dep)
+                    if recurse:
+                        self._dep_search(dep, visited, True)
 
     def __repr__(self) -> str:
-        return f'Construct[{self.name}, used={self.used}]'
+        return f'Construct[{self.name}]'
 
 
 #######################################################################
