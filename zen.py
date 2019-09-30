@@ -460,8 +460,12 @@ class CompileObject:
         found the next time zen is run.
         :return: None
         """
+        # Store constructs
         try:
-            self.build_dir.hash_cache[self.hex] = self.used_content_hash
+            constructs = self.create_constructs()
+            for construct in constructs:
+                cache_k = self.construct_hex(construct.name)
+                self.build_dir.hash_cache[cache_k] = construct.content_hash
         except ParsingException:
             # It is always ok to not store a file hash.
             # This simply causes the object to be treated as if it had
@@ -486,14 +490,42 @@ class CompileObject:
         :return: True if used content has changed.
         :rtype: bool
         """
-        try:
-            cached_hash = self.build_dir.hash_cache[self.hex]
-        except KeyError:
-            # If file not in cache, it either didn't exist at the
-            # time of the last run, or there was a parsing error.
-            # Either way, assume the file has changed significantly.
-            return True
-        return self.used_content_hash != cached_hash
+        graph: ConstructGraph = self.create_constructs()
+        change_cache: ty.Dict['Construct', bool] = {}
+
+        def get_cached_hash(construct: 'Construct') -> int:
+            return self.build_dir.hash_cache[self.construct_hex(construct)]
+
+        def is_changed(construct: 'Construct') -> bool:
+            if construct not in change_cache:
+                for dep in construct.dependencies:
+                    if is_changed(dep):
+                        changed = True
+                        break
+                else:
+                    try:
+                        cached_hash = get_cached_hash(construct)
+                    except KeyError:
+                        changed = True
+                    else:
+                        changed = cached_hash == construct.content_hash
+                change_cache[construct] = changed
+            return change_cache[construct]
+
+        # Find changes
+        # Look through each component of each definition file to see if
+        # any component uses a Construct which has changed.
+        for source in self.sources:
+            if source.is_header:
+                continue
+            if source.substantive_changes(self.build_dir.hash_cache):
+                return True
+            for component in source.content.component.recursive_components:
+                for used_construct in component.used_constructs(
+                        graph.constructs).values():
+                    if is_changed(used_construct):
+                        return True
+        return False
 
     def avoid_build(self) -> None:
         """
@@ -523,102 +555,28 @@ class CompileObject:
             return True
         return any([own_m_time <= dep.m_time for dep in self.sources])
 
-    @property
-    def used_content_hash(self) -> int:
-        if self._used_content_hash is None:
-            constructs: ty.Dict[str, 'Construct'] = self.create_constructs()
-
-            def recurse_component(
-                    component: 'Component'
-            ) -> ty.Iterable['Component']:
-                """
-                Yields components recursively from passed component,
-                yielding first the component itself, and then any sub-
-                components it possesses, sub-components of those
-                sub-components, etc.
-
-                :param component: Component to recurse over.
-                :return: Component generator
-                """
-                yield component
-                for sub_component in component.sub_components:
-                    yield from recurse_component(sub_component)
-                for construct in component.used_constructs(
-                        constructs).values():
-                    if construct.used:
-                        continue
-                    construct.used = True
-                    for component in construct.content:
-                        yield from recurse_component(component)
-
-            def used_components(
-                    source: 'SourceFile') -> ty.Iterable['Component']:
-                """
-                Yields used components from the passed SourceFile.
-                :param source: SourceFile
-                :return: Iterable[Component]
-                """
-                content = source.content
-                block = content.component
-                for component in block.sub_components:
-                    yield from recurse_component(component)
-
-            def used_chunk_strings(source: 'SourceFile') -> ty.Iterable[str]:
-                """
-                Yields the chunk strings of used components within the
-                passed header or definition file.
-                :param source: SourceFile
-                :return: Iterable[str]
-                """
-                for component in used_components(source):
-                    for chunk in component.exposed_content:
-                        yield str(chunk).strip()
-
-            def source_hashes() -> ty.Iterable[int]:
-                """
-                Yields a hash value for each source (header or
-                definition) used by the CompileObject.
-                :return: Iterable[int]
-                """
-                for source in self.sources:
-                    if source.is_header:
-                        yield iter_hash(used_chunk_strings(source))
-                    else:
-                        yield source.stripped_hash
-
-            self._used_content_hash = join_hashes(source_hashes())
-        return self._used_content_hash
-
-    def create_constructs(self) -> ty.Dict[str, 'Construct']:
+    def create_constructs(self) -> 'ConstructGraph':
         """
         Gets constructs produced by sources used by CompileObject.
-        :return: dict of constructs by name str.
-        :rtype Dict[str, Construct]
+        :return: ConstructGraph.
+        :rtype ConstructGraph.
         """
-        def recurse_component(component_: 'Component'):
-            yield component_
-            for sub_component in component_.sub_components:
-                yield from recurse_component(sub_component)
-
-        constructs: ty.Dict[str, 'Construct'] = {}
+        graph = ConstructGraph()
         for source in self.sources:
-            for component in recurse_component(source.content.component):
+            for component in source.content.component.recursive_components:
                 for name, content in component.construct_content.items():
-                    try:
-                        construct = constructs[name]
-                    except KeyError:
-                        construct = constructs[name] = Construct(name)
-                    construct.add_content(content)
-        return constructs
+                    graph.get(name, create=True).add_content(content)
 
-    @property
-    def hex(self) -> str:
+        return graph
+
+    def construct_hex(self, name) -> str:
         """
         Gets the hash hex for a Construct of the passed name.
         :return: hex version of the hash code.
         :rtype: str
         """
-        return hashlib.md5(str(self.path).encode()).hexdigest()
+        k = f'[{str(self.path)}][CONSTRUCT][{name}]'
+        return hashlib.md5(str(k).encode()).hexdigest()
 
     def __repr__(self) -> str:
         return f'Object[{os.path.basename(str(self.path))}]'
