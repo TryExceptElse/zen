@@ -747,7 +747,6 @@ class SourceContent:
         self._raw_hash: ty.Optional[int] = None
         self._stripped_comments: bool = False
         self._component: ty.Optional['Block'] = None
-        self._constructs: ty.Dict[str, 'Construct'] = None
         self._chunk: ty.Optional['Chunk'] = None
 
     def strip_comments(self) -> None:
