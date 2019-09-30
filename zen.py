@@ -100,7 +100,7 @@ class BuildDir:
             for target in self.targets.values()
         }
         self.sources = self._find_sources()
-        self._hash_cache: ty.Dict[str, int] = None
+        self._hash_cache: ty.Optional[ty.Dict[str, int]] = None
 
     def meditate(self) -> None:
         """
