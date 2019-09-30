@@ -138,6 +138,10 @@ class BuildDir:
         return targets
 
     def _find_sources(self) -> ty.Set['SourceFile']:
+        """
+        Finds SourceFiles that are used by any target in this build.
+        :return: Set[SourceFile]
+        """
         dependencies = set()
         for target in self.targets.values():
             for compile_object in target.objects:
@@ -610,9 +614,8 @@ class CompileObject:
     @property
     def hex(self) -> str:
         """
-        Gets the hash of the compile object's path.
-        :return: hex version of the hash code produced from the
-                    object's path.
+        Gets the hash hex for a Construct of the passed name.
+        :return: hex version of the hash code.
         :rtype: str
         """
         return hashlib.md5(str(self.path).encode()).hexdigest()
@@ -1418,6 +1421,10 @@ class Chunk:
 
     @property
     def bounds_description(self) -> str:
+        """
+        Returns human-readable description of chunk bounds.
+        :return: description str
+        """
         if self.start.line_i == self.end.line_i:
             return f'Line {self.start.line_i}, ' \
                 f'Chars {self.start.col_i} to {self.end.col_i}.'
@@ -1766,6 +1773,10 @@ class Component:
 
     @property
     def tokens(self) -> ty.List[str]:
+        """
+        Gets tokens within the block.
+        :return: List[str] of tokens in the component.
+        """
         if self._tokens is None:
             self._tokens = self._find_tokens()
         return self._tokens
@@ -2190,6 +2201,10 @@ class Label(Component):
 
 
 class ControlBlock(Component):
+    """
+    Component representing a control block such as an
+    if, for, while, or do loop.
+    """
 
     KEYWORDS = ('if', 'for', 'while', 'do')
 
