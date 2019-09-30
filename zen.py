@@ -1863,6 +1863,17 @@ class Component:
         """
         return []
 
+    @property
+    def recursive_components(self) -> ty.Iterable['Component']:
+        """
+        Yields all components contained within this
+        component, recursively.
+        :return: Iterable[Component]
+        """
+        for component in self.sub_components:
+            yield component
+            yield from component.recursive_components
+
     def _find_tokens(self) -> ty.List[str]:
         """
         Method used to find tokens for return by 'tokens' property.
