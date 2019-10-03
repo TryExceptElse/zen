@@ -494,7 +494,8 @@ class CompileObject:
         change_cache: ty.Dict['Construct', bool] = {}
 
         def get_cached_hash(construct: 'Construct') -> int:
-            return self.build_dir.hash_cache[self.construct_hex(construct)]
+            k = self.construct_hex(construct.name)
+            return self.build_dir.hash_cache[k]
 
         def is_changed(construct: 'Construct') -> bool:
             if construct not in change_cache:
@@ -508,7 +509,7 @@ class CompileObject:
                     except KeyError:
                         changed = True
                     else:
-                        changed = cached_hash == construct.content_hash
+                        changed = cached_hash != construct.content_hash
                 change_cache[construct] = changed
             return change_cache[construct]
 
@@ -569,9 +570,10 @@ class CompileObject:
 
         return graph
 
-    def construct_hex(self, name) -> str:
+    def construct_hex(self, name: str) -> str:
         """
         Gets the hash hex for a Construct of the passed name.
+        :param name: str name of Construct.
         :return: hex version of the hash code.
         :rtype: str
         """
