@@ -1242,8 +1242,16 @@ class TestConstructGraph(TestCase):
         self.assertRaises(KeyError, graph.get, 'Foo')
 
     def test_simple_deps_are_found(self):
+        """
+        Tests that simple dependencies of a construct are found.
+
+        This test checks that the 'numbers' construct depends upon the
+        'Foo' and 'bar' constructs, which are mentioned in
+        its statement.
+        """
         graph = zen.ConstructGraph()
 
+        # The 'numbers' construct's content mentions 'Foo' and 'bar'.
         graph.get('numbers', create=True).add_content([
             zen.MiscStatement(
                 zen.SourceContent('std::vector<Foo> numbers = bar.get();')
@@ -1272,6 +1280,8 @@ class TestConstructGraph(TestCase):
 
         numbers = graph['numbers']
 
+        # Check that Foo and bar are dependencies of 'numbers' since
+        # they are mentioned within its content.
         assert len(numbers.dependencies) == 2
         assert graph['Foo'] in numbers.dependencies
         assert graph['bar'] in numbers.dependencies
