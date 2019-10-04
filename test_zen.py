@@ -370,18 +370,6 @@ class TestBuildDir(TestCase):
         self.assertEqual(_out['no_rebuild'], second_out)
         self.assertEqual(_out['no_rebuild'], last_out)
 
-    def test_changed_class_declaration_causes_rebuild(self):
-        first_out, second_out, last_out = self.get_output_from_change(
-            # Add definition
-            change_source=lambda project_dir: shutil.copy(
-                Path(TEST_RESOURCES_PATH, 'changed_sample.h'),
-                Path(project_dir, 'sample.h')
-            )
-        )
-        self.assertEqual(_out['full_build'], first_out)
-        self.assertEqual(_out['no_rebuild'], second_out)
-        self.assertEqual(_out['sample_rebuild'], last_out)
-
     def test_change_in_unused_func_in_definition_file_causes_rebuild(self):
         """
         Because functions in definition files may be linked to despite
