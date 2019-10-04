@@ -167,6 +167,12 @@ class TestBuildDir(TestCase):
         return out
 
     def test_meditation_prevents_doc_edit_from_causing_rebuild_cmd_line(self):
+        """
+        Tests that a doc edit does not cause any objects to be rebuilt.
+
+        Unlike the other test with a similar name, this test checks
+        that the behavior is the same when invoked from command line.
+        """
         original_dir = os.curdir
         try:
             with tempfile.TemporaryDirectory() as temp_dir:

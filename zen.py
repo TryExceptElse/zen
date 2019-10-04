@@ -2421,6 +2421,7 @@ class Construct:
     def add_content(self, content: ty.List['Component']) -> None:
         """
         Adds content chunks to construct.
+
         :param content: List[Component]
         :rtype: None
         """
