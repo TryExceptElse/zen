@@ -370,18 +370,6 @@ class TestBuildDir(TestCase):
         self.assertEqual(_out['no_rebuild'], second_out)
         self.assertEqual(_out['no_rebuild'], last_out)
 
-    def test_changed_class_declaration_causes_rebuild(self):
-        first_out, second_out, last_out = self.get_output_from_change(
-            # Add definition
-            change_source=lambda project_dir: shutil.copy(
-                Path(TEST_RESOURCES_PATH, 'changed_sample.h'),
-                Path(project_dir, 'sample.h')
-            )
-        )
-        self.assertEqual(_out['full_build'], first_out)
-        self.assertEqual(_out['no_rebuild'], second_out)
-        self.assertEqual(_out['sample_rebuild'], last_out)
-
     def test_change_in_unused_func_in_definition_file_causes_rebuild(self):
         """
         Because functions in definition files may be linked to despite
@@ -457,6 +445,29 @@ class TestTarget(TestCase):
             build_dir.path, 'CMakeFiles', 'sample_target.dir', 'link.txt')
         self.assertIn(build_file_path, target.other_dependencies)
         self.assertIn(link_file_path, target.other_dependencies)
+
+
+class TestCompileObject(TestCase):
+    def test_constructs_are_found(self):
+        build_dir = zen.BuildDir(SAMPLE_BUILD_DIR)
+        compile_obj = zen.CompileObject(
+            path=Path(SAMPLE_BUILD_DIR, 'obj.o'),  # Unused.
+            sources=[
+                Path(SAMPLE_PROJECT_PATH, 'hello', 'hello.h'),
+                Path(SAMPLE_PROJECT_PATH, 'main.cc'),
+                Path(SAMPLE_PROJECT_PATH, 'sample.h'),
+            ],
+            build_dir=build_dir
+        )
+
+        constructs = compile_obj.create_constructs()
+
+        assert len(constructs) == 4  # Check n
+        keys = constructs.names
+        assert 'hello' in keys
+        assert 'main' in keys
+        assert 'Foo' in keys
+        assert 'Print' in keys
 
 
 class TestSourceFile(TestCase):
@@ -1222,3 +1233,87 @@ class TestParseTags(TestCase):
         assert zen.parse_tags('    int i = 0; ') == set()
         assert zen.parse_tags('    int i = 1;  // Some comment') == set()
         assert zen.parse_tags('    int i = 2;  // comment ZEN(foo)') == {'foo'}
+
+
+class TestConstructGraph(TestCase):
+    def test_duplicate_constructs_are_not_created(self):
+        graph = zen.ConstructGraph()
+        a = graph.get('Foo', create=True)
+        b = graph.get('Bar', create=True)
+        c = graph.get('Baz', create=True)
+        d = graph.get('Foo', create=True)
+
+        assert a is d
+        assert a is not b
+        assert b is not c
+        assert len(graph) == 3
+        
+    def test_constructs_are_not_created_if_create_arg_not_set(self):
+        graph = zen.ConstructGraph()
+        self.assertRaises(KeyError, graph.get, 'Foo')
+
+    def test_simple_deps_are_found(self):
+        """
+        Tests that simple dependencies of a construct are found.
+
+        This test checks that the 'numbers' construct depends upon the
+        'Foo' and 'bar' constructs, which are mentioned in
+        its statement.
+        """
+        graph = zen.ConstructGraph()
+
+        # The 'numbers' construct's content mentions 'Foo' and 'bar'.
+        graph.get('numbers', create=True).add_content([
+            zen.MiscStatement(
+                zen.SourceContent('std::vector<Foo> numbers = bar.get();')
+            )
+        ])
+        graph.get('Foo', create=True).add_content([
+            zen.MiscStatement(
+                zen.SourceContent('class Foo {};')  # Content unimportant
+            )
+        ])
+        graph.get('Herring0', create=True).add_content([
+            zen.MiscStatement(
+                zen.SourceContent('printf("Red");')  # Content unimportant
+            )
+        ])
+        graph.get('Herring1', create=True).add_content([
+            zen.MiscStatement(
+                zen.SourceContent('printf("Herring");')  # Content unimportant
+            )
+        ])
+        graph.get('bar', create=True).add_content([
+            zen.MiscStatement(
+                zen.SourceContent('std::vector<Foo> get() { return {}; }')
+            )
+        ])
+
+        numbers = graph['numbers']
+
+        # Check that Foo and bar are dependencies of 'numbers' since
+        # they are mentioned within its content.
+        assert len(numbers.dependencies) == 2
+        assert graph['Foo'] in numbers.dependencies
+        assert graph['bar'] in numbers.dependencies
+
+    def test_in_operator(self):
+        graph = zen.ConstructGraph()
+        graph.get('numbers', create=True).add_content([
+            zen.MiscStatement(
+                zen.SourceContent('std::vector<Foo> numbers = bar.get();')
+            )
+        ])
+        graph.get('Foo', create=True).add_content([
+            zen.MiscStatement(
+                zen.SourceContent('class Foo {};')  # Content unimportant
+            )
+        ])
+        graph.get('bar', create=True).add_content([
+            zen.MiscStatement(
+                zen.SourceContent('std::vector<Foo> get() { return {}; }')
+            )
+        ])
+
+        assert 'Foo' in graph.names
+        assert 'Buzz' not in graph.names
