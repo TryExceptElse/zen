@@ -1308,3 +1308,24 @@ class TestConstructGraph(TestCase):
         assert len(numbers.dependencies) == 2
         assert graph['Foo'] in numbers.dependencies
         assert graph['bar'] in numbers.dependencies
+
+    def test_in_operator(self):
+        graph = zen.ConstructGraph()
+        graph.get('numbers', create=True).add_content([
+            zen.MiscStatement(
+                zen.SourceContent('std::vector<Foo> numbers = bar.get();')
+            )
+        ])
+        graph.get('Foo', create=True).add_content([
+            zen.MiscStatement(
+                zen.SourceContent('class Foo {};')  # Content unimportant
+            )
+        ])
+        graph.get('bar', create=True).add_content([
+            zen.MiscStatement(
+                zen.SourceContent('std::vector<Foo> get() { return {}; }')
+            )
+        ])
+
+        assert 'Foo' in graph.names
+        assert 'Buzz' not in graph.names

@@ -2394,6 +2394,10 @@ class ConstructGraph:
         construct.graph = self
         self.constructs[construct.name] = construct
 
+    @property
+    def names(self):
+        return self.constructs.keys()
+
     def __repr__(self) -> str:
         return f'ConstructGraph[len={len(self.constructs)}]'
 
