@@ -459,6 +459,29 @@ class TestTarget(TestCase):
         self.assertIn(link_file_path, target.other_dependencies)
 
 
+class TestCompileObject(TestCase):
+    def test_constructs_are_found(self):
+        build_dir = zen.BuildDir(SAMPLE_BUILD_DIR)
+        compile_obj = zen.CompileObject(
+            path=Path(SAMPLE_BUILD_DIR, 'obj.o'),  # Unused.
+            sources=[
+                Path(SAMPLE_PROJECT_PATH, 'hello', 'hello.h'),
+                Path(SAMPLE_PROJECT_PATH, 'main.cc'),
+                Path(SAMPLE_PROJECT_PATH, 'sample.h'),
+            ],
+            build_dir=build_dir
+        )
+
+        constructs = compile_obj.create_constructs()
+
+        assert len(constructs) == 4  # Check n
+        keys = constructs.names
+        assert 'hello' in keys
+        assert 'main' in keys
+        assert 'Foo' in keys
+        assert 'Print' in keys
+
+
 class TestSourceFile(TestCase):
     def tearDown(self):
         zen.clear()
