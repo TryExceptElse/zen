@@ -698,7 +698,6 @@ class SourceContent:
     """
     Class representing the content of a header or definition file.
     """
-    path: Path
     name: ty.Optional[str]
     lines: ty.List['Line']
     _raw_hash: ty.Optional[int]
