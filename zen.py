@@ -699,14 +699,17 @@ class SourceContent:
     Class representing the content of a header or definition file.
     """
     path: Path
+    name: ty.Optional[str]
     lines: ty.List['Line']
     _raw_hash: ty.Optional[int]
 
     def __init__(self, content: ty.Union[str, ty.TextIO]) -> None:
         if isinstance(content, str):
             self.lines = self._lines_from_str(content)
+            self.name = None
         else:
             self.lines = self._lines_from_f(content)
+            self.name = Path(content.name).name
         self._raw_hash: ty.Optional[int] = None
         self._stripped_comments: bool = False
         self._component: ty.Optional['Block'] = None
@@ -813,6 +816,9 @@ class SourceContent:
     @staticmethod
     def _lines_from_f(f: ty.TextIO) -> ty.List['Line']:
         return [Line(i, line_s) for i, line_s in enumerate(f.readlines())]
+
+    def __repr__(self) -> str:
+        return f'SourceContent[{self.name}]'
 
 
 class Line:
