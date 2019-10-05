@@ -1419,6 +1419,27 @@ class TestConstructGraph(TestCase):
         assert 'Buzz' not in graph.names
 
 
+class TestConstruct(TestCase):
+    def test_content_hash_is_same_for_identical_content(self):
+        a = zen.Construct('Print')
+        a.add_content([_make_statement('void Print() const')])
+        a.add_content([_make_statement('printf("Spam");')])
+        b = zen.Construct('Print')
+        b.add_content([_make_statement('void Print() const')])
+        b.add_content([_make_statement('printf("Spam");')])
+        assert a.content_hash == b.content_hash
+
+    def test_content_hash_changes(self):
+        a = zen.Construct('Print')
+        a.add_content([_make_statement('void Print() const')])
+        a.add_content([_make_statement('printf("Spam");')])
+        b = zen.Construct('Print')
+        b.add_content([_make_statement('void Print() const')])
+        b.add_content([_make_statement('printf("Ham");')])
+
+        assert a.content_hash != b.content_hash
+
+
 # Helper functions
 
 
