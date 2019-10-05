@@ -1380,29 +1380,19 @@ class TestConstructGraph(TestCase):
 
         # The 'numbers' construct's content mentions 'Foo' and 'bar'.
         graph.get('numbers', create=True).add_content([
-            zen.MiscStatement(
-                zen.SourceContent('std::vector<Foo> numbers = bar.get();')
-            )
+            _make_statement('std::vector<Foo> numbers = bar.get();')
         ])
         graph.get('Foo', create=True).add_content([
-            zen.MiscStatement(
-                zen.SourceContent('class Foo {};')  # Content unimportant
-            )
+            _make_statement('class Foo {};')  # Content unimportant
         ])
         graph.get('Herring0', create=True).add_content([
-            zen.MiscStatement(
-                zen.SourceContent('printf("Red");')  # Content unimportant
-            )
+            _make_statement('printf("Red");')  # Content unimportant
         ])
         graph.get('Herring1', create=True).add_content([
-            zen.MiscStatement(
-                zen.SourceContent('printf("Herring");')  # Content unimportant
-            )
+            _make_statement('printf("Herring");')  # Content unimportant
         ])
         graph.get('bar', create=True).add_content([
-            zen.MiscStatement(
-                zen.SourceContent('std::vector<Foo> get() { return {}; }')
-            )
+            _make_statement('std::vector<Foo> get() { return {}; }')
         ])
 
         numbers = graph['numbers']
@@ -1416,20 +1406,21 @@ class TestConstructGraph(TestCase):
     def test_in_operator(self):
         graph = zen.ConstructGraph()
         graph.get('numbers', create=True).add_content([
-            zen.MiscStatement(
-                zen.SourceContent('std::vector<Foo> numbers = bar.get();')
-            )
+            _make_statement('std::vector<Foo> numbers = bar.get();')
         ])
         graph.get('Foo', create=True).add_content([
-            zen.MiscStatement(
-                zen.SourceContent('class Foo {};')  # Content unimportant
-            )
+            _make_statement('class Foo {};')  # Content unimportant
         ])
         graph.get('bar', create=True).add_content([
-            zen.MiscStatement(
-                zen.SourceContent('std::vector<Foo> get() { return {}; }')
-            )
+            _make_statement('std::vector<Foo> get() { return {}; }')
         ])
 
         assert 'Foo' in graph.names
         assert 'Buzz' not in graph.names
+
+
+# Helper functions
+
+
+def _make_statement(s: str) -> zen.MiscStatement:
+    return zen.MiscStatement(zen.SourceContent(s))
