@@ -700,6 +700,47 @@ class TestSourceContent(TestCase):
                 zen.MiscStatement
             )
 
+    def test_inline_definition_in_class_parsed_correctly(self):
+        with Path(TEST_RESOURCES_PATH, 'herring_sample5a.h').open() as src_f:
+            content = zen.SourceContent(src_f)
+            components = content.component.sub_components
+            self.assertIsInstance(components[0], zen.PreprocessorComponent)
+            self.assertIsInstance(components[1], zen.PreprocessorComponent)
+            self.assertIsInstance(components[2], zen.NamespaceComponent)
+
+            foo = components[2].sub_components[0]
+            self.assertIsInstance(foo, zen.CppClassDefinition)  # For
+            self.assertEqual('Foo', foo.name)
+
+            foo_comp = foo.member_components
+            self.assertIsInstance(foo_comp[0], zen.Label)
+
+            constructor = foo_comp[1]
+            self.assertIsInstance(constructor, zen.MemberFunctionDefinition)
+            self.assertEqual('Foo', constructor.name)
+            self.assertEqual(
+                'explicit Foo( std::vector<int> numbers): '
+                'numbers_(numbers) {}',
+                str(constructor.chunk)
+            )
+
+            print_method = foo_comp[2]
+            self.assertIsInstance(print_method, zen.MemberFunctionDeclaration)
+            self.assertEqual('Print', print_method.name)
+            self.assertEqual(
+                'void Print() const;',
+                str(print_method.chunk)
+            )
+
+            get_shrubbery = foo_comp[3]
+            self.assertIsInstance(get_shrubbery, zen.MemberFunctionDefinition)
+            self.assertEqual('get_shrubbery', get_shrubbery.name)
+            self.assertEqual(
+                'std::string get_shrubbery() const '
+                '{ return "It is a good shrubbery."; }',
+                str(get_shrubbery.chunk)
+            )
+
 
 class TestSourcePos(TestCase):
     def test_position_can_be_added_to(self):
