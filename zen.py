@@ -2182,6 +2182,13 @@ class Label(Component):
     Ex: "private:"
     """
 
+    @property
+    def name(self) -> str:
+        return self.tokens[0]
+
+    def __repr__(self) -> str:
+        return f'Label[{self.name}]'
+
 
 class ControlBlock(Component):
     """
