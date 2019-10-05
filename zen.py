@@ -912,6 +912,16 @@ class SourcePos:
             col_i: int,
             form: 'SourceForm'
     ) -> None:
+        """
+        Create new SourcePos
+
+        :param file_content: SourceContent instance.
+        :param line_i: Line index int.
+        :param col_i: Column index int.
+        :param form: Form of source code which is referenced.
+                    Positions will differ depending on the SourceForm
+                    which they use.
+        """
         self.file_content = file_content
         self.form = form
         if not self.file_content.has_uncommented and form in (
