@@ -742,6 +742,22 @@ class TestSourceContent(TestCase):
                 str(get_shrubbery.chunk)
             )
 
+    def test_attempt_to_strip_comments_twice_raises_err(self):
+        content = zen.SourceContent('    \n    \n\n  \n\nFoo')
+        content.strip_comments()
+        self.assertRaises(ValueError, content.strip_comments)
+
+
+class TestLine(TestCase):
+    def test_commented_form_may_be_set(self):
+        line = zen.Line(5, 'foo  // comment.')
+        line.uncommented = 'foo'
+        self.assertEqual('foo', line.uncommented)
+
+    def test_accessing_uncommented_form_before_it_is_set_raises_attr_err(self):
+        line = zen.Line(5, 'foo')
+        self.assertRaises(ValueError, lambda: line.uncommented)
+
 
 class TestSourcePos(TestCase):
     def test_position_can_be_added_to(self):
@@ -901,6 +917,17 @@ class TestChunk(TestCase):
         self.assertEqual('This file\nhas', str(a))
         self.assertEqual('has', str(b))
 
+    def test_slice_raises_value_err_if_step_is_not_1(self):
+        content = zen.SourceContent('This file\nhas three\nlines.')
+        chunk = zen.Chunk(content)
+        self.assertRaises(ValueError, lambda: chunk[0:5:2])
+
+    def test_slice_can_be_passed_negative_integers(self):
+        content = zen.SourceContent('This file\nhas three\nlines.')
+        chunk = zen.Chunk(content)
+        sub_chunk = chunk[-6:-1]
+        self.assertEqual('lines', str(sub_chunk))
+
     def test_chunk_can_be_turned_into_string(self):
         content = zen.SourceContent('This file\nhas three\nlines.')
         chunk = zen.Chunk(content)
@@ -976,6 +1003,23 @@ class TestChunk(TestCase):
         self.assertEqual(2, end_pos.line_i)
         self.assertEqual(0, end_pos.col_i)
 
+    def test_find_pair_raises_err_when_start_not_a_bracket(self):
+        chunk = _make_chunk("{foo {\n{foo('}')};\n}\n}")
+        self.assertRaises(ValueError, chunk.find_pair, chunk.pos(0, 3))
+
+    def test_find_pair_raises_err_when_end_not_in_chunk(self):
+        chunk = _make_chunk("{foo {\n{foo('}')};\n}\n")
+        self.assertRaises(zen.ParsingException, chunk.find_pair, chunk.start)
+
+    def test_find_pair_raises_err_if_semicolon_reached_when_disallowed(self):
+        chunk = _make_chunk("{foo {\n{foo('}')};\n};\n}")
+        self.assertRaises(
+            zen.ParsingException,
+            chunk.find_pair,
+            chunk.start,
+            allow_semicolon=False
+        )
+
     def test_quote_end_can_be_found(self):
         content = zen.SourceContent('foo("some [string]\\" argument")')
         chunk = zen.Chunk(content)
@@ -983,6 +1027,20 @@ class TestChunk(TestCase):
         end_pos = chunk.find_quote_end(first_quote_pos)
         self.assertEqual(0, end_pos.line_i)
         self.assertEqual(29, end_pos.col_i)
+
+    def test_find_quote_end_raises_err_if_start_not_quote(self):
+        content = zen.SourceContent('foo("some [string]\\" argument")')
+        chunk = zen.Chunk(content)
+        self.assertRaises(ValueError, chunk.find_quote_end, chunk.pos(0, 0))
+
+    def test_find_quote_end_raises_err_if_no_end_in_line(self):
+        content = zen.SourceContent('foo("some [string]\\"\n argument")')
+        chunk = zen.Chunk(content)
+        self.assertRaises(ValueError, chunk.find_quote_end, chunk.pos(0, 4))
+
+    def test_find_quote_end_raises_err_if_no_end_in_chunk(self):
+        chunk = zen.Chunk(zen.SourceContent(r'foo("some [string]\"'))
+        self.assertRaises(ValueError, chunk.find_quote_end, chunk.pos(0, 4))
 
     def test_line_can_be_retrieved_from_pos(self):
         content = zen.SourceContent('{Some bracket {\n{foo};\n}\n}')
@@ -1372,11 +1430,26 @@ class TestFindScopeTokens(TestCase):
         tokens = zen.scope_tokens(chunk)
         self.assertEqual(['template', 'T', 'custom_max'], tokens)
 
+    def test_scope_tokens_skips_quotes(self):
+        content = zen.SourceContent(
+            'std::string some_str = "hi", other_str\n'
+        )
+        chunk = content.component.chunk
+        tokens = zen.scope_tokens(chunk)
+        self.assertEqual(['std', 'string', 'some_str', 'other_str'], tokens)
+
 
 class TestIterHash(TestCase):
     def test_hash_is_repeatable(self):
         result: int = zen.iter_hash((s for s in ['a', 'b', 'c']))
         self.assertEqual(158539464831404298579059230396920922247, result)
+
+    def test_raises_on_none_if_not_expected(self):
+        self.assertRaises(
+            ValueError,
+            zen.iter_hash,
+            ('iterable', 'with', None, 'in', 'it'),
+        )
 
 
 class TestParseTags(TestCase):
@@ -1398,6 +1471,27 @@ class TestConstructGraph(TestCase):
         assert a is not b
         assert b is not c
         assert len(graph) == 3
+
+    def test_add_sets_construct_parent_graph(self):
+        graph = zen.ConstructGraph()
+        construct = zen.Construct('Foo', graph=None)
+        graph.add(construct)
+        self.assertIs(graph, construct.graph)
+
+    def test_add_method_adds_constructs_correctly(self):
+        graph = zen.ConstructGraph()
+        a = zen.Construct('Foo', graph=None)
+        b = zen.Construct('Bar', graph=None)
+        graph.add(a)
+        graph.add(b)
+        self.assertEqual(2, len(graph))
+
+    def test_add_raises_value_err_if_construct_already_in_a_graph(self):
+        graph_a = zen.ConstructGraph()
+        graph_b = zen.ConstructGraph()
+        construct = graph_a.get('Foo', create=True)
+
+        self.assertRaises(ValueError, graph_b.add, construct)
 
     def test_constructs_are_not_created_if_create_arg_not_set(self):
         graph = zen.ConstructGraph()
@@ -1522,3 +1616,7 @@ class TestConstruct(TestCase):
 
 def _make_statement(s: str) -> zen.MiscStatement:
     return zen.MiscStatement(zen.SourceContent(s))
+
+
+def _make_chunk(s: str) -> zen.Chunk:
+    return zen.Chunk(zen.SourceContent(s))

@@ -855,7 +855,9 @@ class Line:
         :return: str of uncommented content of line.
         """
         if self._uncommented is None:
-            raise AttributeError(
+            # Raise ValueError to remain consistent with the python
+            # convention of using ValueError in cases of invalid state.
+            raise ValueError(
                 f'Uncommented value of {repr(self)} has not been set.')
         return self._uncommented
 
