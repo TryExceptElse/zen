@@ -15,5 +15,11 @@ install:
 # command to run tests
 script:
   - coverage run -m pytest
+matrix:
+  include:
+    - name: "Run Mypy check."
+      python: "3.7"
+      install: pip install mypy
+      script: python scripts/check.py
 after_success:
   - codecov
