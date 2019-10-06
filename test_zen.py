@@ -824,6 +824,15 @@ class TestSourceContent(TestCase):
         content = zen.SourceContent('    \n    \n\n  \n\nFoo')
         content.strip_comments()
         self.assertRaises(ValueError, content.strip_comments)
+        
+    def test_component_and_default_chunk_are_equivalent(self):
+        with Path(TEST_RESOURCES_PATH, 'herring_sample5a.h').open() as src_f:
+            content = zen.SourceContent(src_f)
+        a = content.chunk.strip()
+        b = content.component.chunk.strip()
+        c = zen.Chunk(content).strip()
+        self.assertEqual(str(a), str(b))
+        self.assertEqual(str(a), str(c))
 
 
 class TestLine(TestCase):
@@ -849,8 +858,7 @@ class TestSourcePos(TestCase):
         self.assertEqual('.', chunk[c])
 
     def test_addition_does_not_modify_operands(self):
-        content = zen.SourceContent('This file\nhas three\nlines.')
-        chunk = zen.Chunk(content)
+        chunk = _make_chunk('This file\nhas three\nlines.')
         a = chunk.start
         initial_line_i = a.line_i
         initial_col_i = a.col_i
@@ -859,22 +867,19 @@ class TestSourcePos(TestCase):
         self.assertEqual(initial_col_i, a.col_i)
 
     def test_position_can_be_added_to_to_get_end_pos(self):
-        content = zen.SourceContent('This file\nhas three\nlines.')
-        chunk = zen.Chunk(content)
+        chunk = _make_chunk('This file\nhas three\nlines.')
         a = chunk.start
         b = a + 26
         self.assertEqual(b, chunk.end)
 
     def test_position_can_be_added_to_to_get_end_pos_on_same_line(self):
-        content = zen.SourceContent('This file\nhas three\nlines.')
-        chunk = zen.Chunk(content)
+        chunk = _make_chunk('This file\nhas three\nlines.')
         a = chunk.start + 22
         b = a + 4
         self.assertEqual(b, chunk.end)
 
     def test_negative_number_can_be_added(self):
-        content = zen.SourceContent('This file\nhas three\nlines.')
-        chunk = zen.Chunk(content)
+        chunk = _make_chunk('This file\nhas three\nlines.')
         a = chunk.end + -1
         b = chunk.end + -16
         c = chunk.end + -26
@@ -883,13 +888,11 @@ class TestSourcePos(TestCase):
         self.assertEqual('.', chunk[a])
 
     def test_position_addition_throws_value_error_if_x_too_large(self):
-        content = zen.SourceContent('This file\nhas three\nlines.')
-        chunk = zen.Chunk(content)
+        chunk = _make_chunk('This file\nhas three\nlines.')
         self.assertRaises(ValueError, lambda: chunk.start + 27)
 
     def test_position_can_be_subtracted_from(self):
-        content = zen.SourceContent('This file\nhas three\nlines.')
-        chunk = zen.Chunk(content)
+        chunk = _make_chunk('This file\nhas three\nlines.')
         a = chunk.end - 1
         b = chunk.end - 16
         c = chunk.end - 26
@@ -898,8 +901,7 @@ class TestSourcePos(TestCase):
         self.assertEqual('.', chunk[a])
 
     def test_negative_number_can_be_subtracted(self):
-        content = zen.SourceContent('This file\nhas three\nlines.')
-        chunk = zen.Chunk(content)
+        chunk = _make_chunk('This file\nhas three\nlines.')
         a = chunk.start
         b = a - -10
         c = a - -25
@@ -908,8 +910,7 @@ class TestSourcePos(TestCase):
         self.assertEqual('.', chunk[c])
 
     def test_position_subtraction_throws_value_error_if_x_too_large(self):
-        content = zen.SourceContent('This file\nhas three\nlines.')
-        chunk = zen.Chunk(content)
+        chunk = _make_chunk('This file\nhas three\nlines.')
         self.assertRaises(ValueError, lambda: chunk.end - 27)
 
     def test_next_line_can_be_accessed(self):
@@ -959,8 +960,7 @@ class TestSourcePos(TestCase):
 
 class TestChunk(TestCase):
     def test_chunk_created_from_content_has_correct_length(self):
-        content = zen.SourceContent('\n\n\n\n\n\nclass Foo')
-        self.assertEqual(15, len(zen.Chunk(content)))
+        self.assertEqual(15, len(_make_chunk('\n\n\n\n\n\nclass Foo')))
 
     def test_chunk_created_from_content_same_string(self):
         s = '\n\n\n\n\n\nclass Foo'
@@ -983,8 +983,7 @@ class TestChunk(TestCase):
         self.assertRaises(ValueError, zen.Chunk, content, start_pos2, end_pos2)
 
     def test_chunk_index_accessor_works_correctly(self):
-        content = zen.SourceContent('This file\nhas three\nlines.')
-        chunk = zen.Chunk(content)
+        chunk = _make_chunk('This file\nhas three\nlines.')
         self.assertEqual('T', chunk[0])
         self.assertEqual('h', chunk[10])
         self.assertEqual('.', chunk[-1])
@@ -997,15 +996,13 @@ class TestChunk(TestCase):
         assert chunk[15] == 'l'
 
     def test_source_pos_can_be_passed_to_getitem(self):
-        content = zen.SourceContent('This file\nhas three\nlines.')
-        chunk = zen.Chunk(content)
+        chunk = _make_chunk('This file\nhas three\nlines.')
         self.assertEqual('T', chunk[chunk.pos(0, 0)])
         self.assertEqual('h', chunk[chunk.pos(1, 0)])
         self.assertEqual('.', chunk[chunk.pos(-1, -1)])
 
     def test_source_pos_can_be_sliced_with_positions(self):
-        content = zen.SourceContent('This file\nhas three\nlines.')
-        chunk = zen.Chunk(content)
+        chunk = _make_chunk('This file\nhas three\nlines.')
         a = chunk[:chunk.pos(1, 3)]
         b = a[chunk.pos(1):]
         self.assertEqual('This file\nhas three\nlines.', str(chunk))
@@ -1013,20 +1010,18 @@ class TestChunk(TestCase):
         self.assertEqual('has', str(b))
 
     def test_slice_raises_value_err_if_step_is_not_1(self):
-        content = zen.SourceContent('This file\nhas three\nlines.')
-        chunk = zen.Chunk(content)
+        chunk = _make_chunk('This file\nhas three\nlines.')
         self.assertRaises(ValueError, lambda: chunk[0:5:2])
 
     def test_slice_can_be_passed_negative_integers(self):
-        content = zen.SourceContent('This file\nhas three\nlines.')
-        chunk = zen.Chunk(content)
+        chunk = _make_chunk('This file\nhas three\nlines.')
         sub_chunk = chunk[-6:-1]
         self.assertEqual('lines', str(sub_chunk))
 
     def test_chunk_can_be_turned_into_string(self):
-        content = zen.SourceContent('This file\nhas three\nlines.')
-        chunk = zen.Chunk(content)
-        self.assertEqual('This file\nhas three\nlines.', str(chunk))
+        s = 'This file\nhas three\nlines.'
+        chunk = _make_chunk(s)
+        self.assertEqual(s, str(chunk))
 
     def test_chunk_can_be_turned_into_string2(self):
         content = zen.SourceContent('This file\nhas three\nlines.')
@@ -1036,8 +1031,7 @@ class TestChunk(TestCase):
         self.assertEqual('has', str(chunk))
 
     def test_chunk_chars_can_be_iterated_over(self):
-        content = zen.SourceContent('This file\nhas three\nlines.')
-        chunk = zen.Chunk(content)
+        chunk = _make_chunk('This file\nhas three\nlines.')
         chars = [c for c in chunk]
         self.assertEqual(len('This file\nhas three\nlines.'), len(chars))
         self.assertEqual('T', chars[0])
@@ -1059,40 +1053,35 @@ class TestChunk(TestCase):
         self.assertEqual('has three\nlines.', str(chunk))
 
     def test_chunk_may_be_default_tokenized(self):
-        content = zen.SourceContent('This file\nhas three\nlines.\nfoo123')
-        chunk = zen.Chunk(content)
+        chunk = _make_chunk('This file\nhas three\nlines.\nfoo123')
         self.assertEqual(
             ['This', 'file', 'has', 'three', 'lines', 'foo123'],  # No period.
             chunk.tokenize()
         )
 
     def test_simple_bracket_pair_can_be_found(self):
-        content = zen.SourceContent('Some bracket {\nfoo;\n}\n')
-        chunk = zen.Chunk(content)
+        chunk = _make_chunk('Some bracket {\nfoo;\n}\n')
         first_bracket_pos = chunk.pos(0, -2)
         end_pos = chunk.find_pair(first_bracket_pos)
         self.assertEqual(2, end_pos.line_i)
         self.assertEqual(0, end_pos.col_i)
 
     def test_nested_bracket_pair_can_be_found(self):
-        content = zen.SourceContent('{Some bracket {\n{foo};\n}\n}')
-        chunk = zen.Chunk(content)
+        chunk = _make_chunk('{Some bracket {\n{foo};\n}\n}')
         first_bracket_pos = chunk.pos(0, -2)
         end_pos = chunk.find_pair(first_bracket_pos)
         self.assertEqual(2, end_pos.line_i)
         self.assertEqual(0, end_pos.col_i)
 
     def test_bracket_pair_can_be_found_when_quoted_brackets_are_used(self):
-        content = zen.SourceContent('{foo {\n{foo("bracket: }")};\n}\n}')
-        chunk = zen.Chunk(content)
+        chunk = _make_chunk('{foo {\n{foo("bracket: }")};\n}\n}')
         first_bracket_pos = chunk.pos(0, -2)
         end_pos = chunk.find_pair(first_bracket_pos)
         self.assertEqual(2, end_pos.line_i)
         self.assertEqual(0, end_pos.col_i)
 
     def test_bracket_pair_can_be_found_when_bracket_char_is_used(self):
-        content = zen.SourceContent("{foo {\n{foo('}')};\n}\n}")
-        chunk = zen.Chunk(content)
+        chunk = _make_chunk("{foo {\n{foo('}')};\n}\n}")
         first_bracket_pos = chunk.pos(0, -2)
         end_pos = chunk.find_pair(first_bracket_pos)
         self.assertEqual(2, end_pos.line_i)
@@ -1116,36 +1105,31 @@ class TestChunk(TestCase):
         )
 
     def test_quote_end_can_be_found(self):
-        content = zen.SourceContent('foo("some [string]\\" argument")')
-        chunk = zen.Chunk(content)
+        chunk = _make_chunk('foo("some [string]\\" argument")')
         first_quote_pos = chunk.pos(0, 4)
         end_pos = chunk.find_quote_end(first_quote_pos)
         self.assertEqual(0, end_pos.line_i)
         self.assertEqual(29, end_pos.col_i)
 
     def test_find_quote_end_raises_err_if_start_not_quote(self):
-        content = zen.SourceContent('foo("some [string]\\" argument")')
-        chunk = zen.Chunk(content)
+        chunk = _make_chunk('foo("some [string]\\" argument")')
         self.assertRaises(ValueError, chunk.find_quote_end, chunk.pos(0, 0))
 
     def test_find_quote_end_raises_err_if_no_end_in_line(self):
-        content = zen.SourceContent('foo("some [string]\\"\n argument")')
-        chunk = zen.Chunk(content)
+        chunk = _make_chunk('foo("some [string]\\"\n argument")')
         self.assertRaises(ValueError, chunk.find_quote_end, chunk.pos(0, 4))
 
     def test_find_quote_end_raises_err_if_no_end_in_chunk(self):
-        chunk = zen.Chunk(zen.SourceContent(r'foo("some [string]\"'))
+        chunk = _make_chunk(r'foo("some [string]\"')
         self.assertRaises(ValueError, chunk.find_quote_end, chunk.pos(0, 4))
 
     def test_line_can_be_retrieved_from_pos(self):
-        content = zen.SourceContent('{Some bracket {\n{foo};\n}\n}')
-        chunk = zen.Chunk(content)
+        chunk = _make_chunk('{Some bracket {\n{foo};\n}\n}')
         pos = chunk.pos(1, 2)
         self.assertEqual(1, chunk.line(pos).index)
 
     def test_chunk_can_strip_whitespace_lines(self):
-        content = zen.SourceContent('\n\n\nfoo("some arg")\n\n')
-        chunk = zen.Chunk(content)
+        chunk = _make_chunk('\n\n\nfoo("some arg")\n\n')
         stripped = chunk.strip()
         self.assertEqual(3, stripped.start.line_i)
         self.assertEqual(0, stripped.start.col_i)
@@ -1153,8 +1137,7 @@ class TestChunk(TestCase):
         self.assertEqual(15, stripped.end.col_i)
 
     def test_chunk_does_not_strip_non_whitespace_chars(self):
-        content = zen.SourceContent('\n\n\nfoo("some arg")')
-        chunk = zen.Chunk(content)
+        chunk = _make_chunk('\n\n\nfoo("some arg")')
         stripped = chunk.strip()
         self.assertEqual(3, stripped.start.line_i)
         self.assertEqual(0, stripped.start.col_i)
@@ -1163,8 +1146,7 @@ class TestChunk(TestCase):
         self.assertEqual('foo("some arg")', str(stripped))
 
     def test_chunk_can_be_stripped_when_trailing_spaces_are_present(self):
-        content = zen.SourceContent('\n\n\nfoo("some arg") \n\n')
-        chunk = zen.Chunk(content)
+        chunk = _make_chunk('\n\n\nfoo("some arg") \n\n')
         stripped = chunk.strip()
         self.assertEqual(3, stripped.start.line_i)
         self.assertEqual(0, stripped.start.col_i)
@@ -1172,39 +1154,33 @@ class TestChunk(TestCase):
         self.assertEqual(15, stripped.end.col_i)
 
     def test_chunk_hash_is_same_for_chunks_with_same_stripped_content(self):
-        content_a = zen.SourceContent('This file\nhas three\nlines.')
-        chunk_a = zen.Chunk(content_a)
+        chunk_a = _make_chunk('This file\nhas three\nlines.')
         hash_a = chunk_a.content_hash
-        content_b = zen.SourceContent('This file\n  has   three\nlines.')
-        chunk_b = zen.Chunk(content_b)
+        chunk_b = _make_chunk('This file\n  has   three\nlines.')
         hash_b = chunk_b.content_hash
         self.assertEqual(hash_a, hash_b)
 
     def test_chunk_hash_is_same_for_chunks_with_same_stripped_content2(self):
-        content_a = zen.SourceContent('This file\nhas three\nlines.')
-        chunk_a = zen.Chunk(content_a)
+        chunk_a = _make_chunk('This file\nhas three\nlines.')
         hash_a = chunk_a[chunk_a.pos(1, 0):].content_hash
-        content_b = zen.SourceContent('file\n  has   three\nlines.')
-        chunk_b = zen.Chunk(content_b)
+        chunk_b = _make_chunk('file\n  has   three\nlines.')
         hash_b = chunk_b[chunk_b.pos(1, 0):].content_hash
         self.assertEqual(hash_a, hash_b)
 
     def test_chunk_hash_differs_if_content_does(self):
-        content_a = zen.SourceContent('This file\nhas three\nlines.')
-        chunk_a = zen.Chunk(content_a)
+        chunk_a = _make_chunk('This file\nhas three\nlines.')
         hash_a = chunk_a.content_hash
-        content_b = zen.SourceContent('file\n  has   three\nlines.')
-        chunk_b = zen.Chunk(content_b)
+        chunk_b = _make_chunk('file\n  has   three\nlines.')
         hash_b = chunk_b.content_hash
         self.assertNotEqual(hash_a, hash_b)
 
     def test_hash_differs_if_single_line_content_does(self):
-        a = zen.Chunk(zen.SourceContent('void Print() const'))
-        b = zen.Chunk(zen.SourceContent('printf("Spam");'))
+        a = _make_chunk('void Print() const')
+        b = _make_chunk('printf("Spam");')
         self.assertNotEqual(a.content_hash, b.content_hash)
 
     def test_basic_line_strings(self):
-        chunk = zen.Chunk(zen.SourceContent('This file\nhas three\nlines.'))
+        chunk = _make_chunk('This file\nhas three\nlines.')
         self.assertEqual(
             ['This file\n', 'has three\n', 'lines.'],
             [line for line in chunk.line_strings]
@@ -1213,9 +1189,8 @@ class TestChunk(TestCase):
 
 class TestComponent(TestCase):
     def test_lambdas_are_recognized(self):
-        content = zen.SourceContent(_code_samples['func_body_with_lambda'])
-        statement = zen.Component.create(
-            content.component.chunk, scope=zen.ScopeType.FUNC)
+        chunk = _make_chunk(_code_samples['func_body_with_lambda'])
+        statement = zen.Component.create(chunk, scope=zen.ScopeType.FUNC)
         self.assertEqual(
             'auto f = [](string s){ std::cout << s; };',
             str(statement.chunk),
@@ -1224,20 +1199,17 @@ class TestComponent(TestCase):
 
 class TestCppClassForwardDeclaration(TestCase):
     def test_name_is_correct(self):
-        content = zen.SourceContent(
-            '\n\nclass __some_attr Foo;'
-        )
-        declaration = zen.CppClassForwardDeclaration(content.component.chunk)
+        chunk = _make_chunk('\n\nclass __some_attr Foo;')
+        declaration = zen.CppClassForwardDeclaration(chunk)
         self.assertEqual('Foo', declaration.name)
 
 
 class TestCppClassDefinition(TestCase):
     def get_class_def(self) -> zen.CppClassDefinition:
-        with Path(CODE_SAMPLES_PATH, 'sample_class').open() as src_f:
-            content = zen.SourceContent(src_f)
-            definition = content.component.sub_components[0]
-            self.assertIsInstance(definition, zen.CppClassDefinition)
-            return definition
+        content = zen.SourceContent(_code_samples['sample_class'])
+        definition = content.component.sub_components[0]
+        self.assertIsInstance(definition, zen.CppClassDefinition)
+        return definition
 
     def test_class_produces_correctly_named_constructs(self):
         definition = self.get_class_def()
@@ -1306,39 +1278,37 @@ class TestFunctionDeclaration(TestCase):
         The code of the function declaration matters only if the
         function is used.
         """
-        content = zen.SourceContent(
+        chunk = _make_chunk(
             '\n\nstd::string RedHerring();\n'
         )
-        definition = zen.FunctionDeclaration(content.component.chunk)
+        definition = zen.FunctionDeclaration(chunk)
         self.assertEqual([], definition.exposed_content)
 
 
 class TestFunctionDefinition(TestCase):
     def test_tokens_are_correct(self):
-        content = zen.SourceContent(
+        chunk = _make_chunk(
             '\n\ninline std::string RedHerring() { return "Hello"; }\n'
         )
-        definition = zen.FunctionDefinition(content.component.chunk)
+        definition = zen.FunctionDefinition(chunk)
         self.assertEqual(
             ['inline', 'std', 'string', 'RedHerring'],
             definition.tokens
         )
 
     def test_tags_are_found_in_multi_line_function(self):
-        content = zen.SourceContent(
+        chunk = _make_chunk(
             'void Sample() const {\n'
             '   // ZEN(note1)\n'
             '   foo();  // ZEN(note2)\n'
             '}'
         )
-        definition = zen.FunctionDefinition(content.component.chunk)
+        definition = zen.FunctionDefinition(chunk)
         self.assertEqual({'note1'}, definition.tags)
 
     def test_tags_are_found_in_single_line_function(self):
-        content = zen.SourceContent(
-            'void Sample() const { foo(); }  // ZEN(note2)'
-        )
-        definition = zen.FunctionDefinition(content.component.chunk)
+        chunk = _make_chunk('void Sample() const { foo(); }  // ZEN(note2)')
+        definition = zen.FunctionDefinition(chunk)
         self.assertEqual({'note2'}, definition.tags)
 
     def test_definition_has_no_external_content(self):
@@ -1350,10 +1320,10 @@ class TestFunctionDefinition(TestCase):
         The code of the function definition matters only if the
         function is used.
         """
-        content = zen.SourceContent(
+        chunk = _make_chunk(
             '\n\ninline std::string RedHerring() { return "Hello"; }\n'
         )
-        definition = zen.FunctionDefinition(content.component.chunk)
+        definition = zen.FunctionDefinition(chunk)
         self.assertEqual([], definition.exposed_content)
 
     def test_used_constructs(self):
@@ -1363,52 +1333,50 @@ class TestFunctionDefinition(TestCase):
             'hello': zen.Construct('function'),
             'unused_name': zen.Construct('unused_construct')
         }
-        content = zen.SourceContent(
+        chunk = _make_chunk(
             """int main() {
                 sample::Foo foo(std::vector<int>{1, 2, 3});
                 foo.Print();
                 hello();
             }"""
         )
-        definition = zen.FunctionDefinition(content.component.chunk)
+        definition = zen.FunctionDefinition(chunk)
         used_names = set(definition.used_constructs(constructs).keys())
         self.assertEqual({'Foo', 'Print', 'hello'}, used_names)
 
 
 class TestMemberFunctionDeclaration(TestCase):
     def test_construct_is_correctly_named(self):
-        content = zen.SourceContent('void Print() const;')
-        declaration = zen.MemberFunctionDeclaration(content.component.chunk)
+        chunk = _make_chunk('void Print() const;')
+        declaration = zen.MemberFunctionDeclaration(chunk)
         self.assertEqual(1, len(declaration.construct_content))
         self.assertIn('Print', declaration.construct_content)
 
     def test_whole_declaration_is_in_exposed_content(self):
         s = 'void Print() const;'
-        content = zen.SourceContent(s)
-        declaration = zen.MemberFunctionDeclaration(content.component.chunk)
+        chunk = _make_chunk(s)
+        declaration = zen.MemberFunctionDeclaration(chunk)
         self.assertEqual(s, str(declaration.exposed_content[0]))
 
 
 class TestMemberFunctionDefinition(TestCase):
     def test_construct_is_correctly_named(self):
-        with Path(CODE_SAMPLES_PATH, 'sample_member_func').open() as src_f:
-            content_s = src_f.read()
-        content = zen.SourceContent(content_s)
-        definition = zen.MemberFunctionDefinition(content.component.chunk)
+        chunk = _make_chunk(_code_samples['sample_member_func'])
+        definition = zen.MemberFunctionDefinition(chunk)
         self.assertEqual(1, len(definition.construct_content))
         self.assertIn('Print', definition.construct_content)
 
     def test_code_preceding_function_block_is_external(self):
-        content = zen.SourceContent(_code_samples['sample_member_func'])
-        definition = zen.MemberFunctionDefinition(content.component.chunk)
+        chunk = _make_chunk(_code_samples['sample_member_func'])
+        definition = zen.MemberFunctionDefinition(chunk)
         self.assertEqual(1, len(definition.construct_content))
         self.assertIn('Print', definition.construct_content)
 
 
 class TestMemberOperatorDefinition(TestCase):
     def test_construct_is_correctly_named(self):
-        content = zen.SourceContent(_code_samples['sample_operator_func'])
-        definition = zen.MemberOperatorDefinition(content.component.chunk)
+        chunk = _make_chunk(_code_samples['sample_operator_func'])
+        definition = zen.MemberOperatorDefinition(chunk)
 
         name = 'operator++'
         self.assertEqual(1, len(definition.construct_content))
@@ -1420,8 +1388,8 @@ class TestMemberOperatorDefinition(TestCase):
         Since the call operator has an extra set of parenthesis, it is
         given its own test to ensure correct operation.
         """
-        content = zen.SourceContent(_code_samples['sample_operator_call_func'])
-        definition = zen.MemberOperatorDefinition(content.component.chunk)
+        chunk = _make_chunk(_code_samples['sample_operator_call_func'])
+        definition = zen.MemberOperatorDefinition(chunk)
 
         name = 'operator()'
         self.assertEqual(1, len(definition.construct_content))
@@ -1437,15 +1405,15 @@ class TestControlComponent(TestCase):
         self.assertIsInstance(components[0], zen.ControlBlock)
 
     def test_control_block_has_correct_sub_components(self):
-        content = zen.SourceContent('for (i = 0; i < 5; ++i) { a += 5; }')
-        control_component = zen.ControlBlock(content.component.chunk)
+        chunk = _make_chunk('for (i = 0; i < 5; ++i) { a += 5; }')
+        control_component = zen.ControlBlock(chunk)
         sub_components = control_component.sub_components
         self.assertEqual(1, len(sub_components))
         self.assertIsInstance(sub_components[0], zen.MiscStatement)
 
     def test_exposed_content_only_includes_prefix(self):
-        content = zen.SourceContent('for (i = 0; i < 5; ++i){ a += 5; }')
-        control_component = zen.ControlBlock(content.component.chunk)
+        chunk = _make_chunk('for (i = 0; i < 5; ++i){ a += 5; }')
+        control_component = zen.ControlBlock(chunk)
         self.assertEqual(1, len(control_component.exposed_content))
         self.assertEqual(
             'for (i = 0; i < 5; ++i)',
@@ -1453,36 +1421,35 @@ class TestControlComponent(TestCase):
         )
 
     def test_correct_tokens_are_present(self):
-        content = zen.SourceContent('for (i = 0; i < 5; ++i){ a += 5; }')
-        component = zen.ControlBlock(content.component.chunk)
+        chunk = _make_chunk('for (i = 0; i < 5; ++i){ a += 5; }')
+        component = zen.ControlBlock(chunk)
         self.assertEqual(['for', 'i', '0', 'i', '5', 'i'], component.tokens)
 
 
 class TestNamespace(TestCase):
     def test_exposed_content_only_includes_prefix(self):
-        content = zen.SourceContent(
+        chunk = _make_chunk(
             'namespace ns{ \n'
             'void foo() { std::cout << "hi"; }\n'
             '}  // namespace ns\n'
         )
-        namespace = zen.NamespaceComponent(content.component.chunk)
+        namespace = zen.NamespaceComponent(chunk)
         self.assertEqual(1, len(namespace.exposed_content))
         self.assertEqual('namespace ns', str(namespace.exposed_content[0]))
 
     def test_tokens(self):
-        content = zen.SourceContent(
+        chunk = _make_chunk(
             'namespace ns{ \n'
             'void foo() { std::cout << "hi"; }\n'
             '}  // namespace ns\n'
         )
-        namespace = zen.NamespaceComponent(content.component.chunk)
+        namespace = zen.NamespaceComponent(chunk)
         self.assertEqual(['namespace', 'ns'], namespace.tokens)
 
 
 class TestMiscComponent(TestCase):
     def test_correct_tokens_are_present(self):
-        content = zen.SourceContent('std::vector<int> numbers_;')
-        chunk = content.component.chunk
+        chunk = _make_chunk('std::vector<int> numbers_;')
         statement = zen.MiscStatement(chunk)
         self.assertEqual(
             ['std', 'vector', 'int', 'numbers_'],
@@ -1492,55 +1459,48 @@ class TestMiscComponent(TestCase):
 
 class TestFindInScope(TestCase):
     def test_find_in_scope_finds_bracket_start(self):
-        content = zen.SourceContent(
+        chunk = _make_chunk(
             '\n\n\n\ntemplate <typename T>\n'
             'T custom_max(T x, T y)\n{\n'
             'return (x > y)? x: y;\n'
             '}'
         )
-        chunk = content.component.chunk
         result = zen.find_in_scope('{', chunk)
         self.assertEqual(6, result.line_i)
         self.assertEqual(0, result.col_i)
 
     def test_find_in_scope_handles_quotes_correctly(self):
-        content = zen.SourceContent(
+        chunk = _make_chunk(
             '\n\n\n\ntemplate <string s = "somestr{ng">\n'
             'T custom_max(T x, T y)\n{\n'
             'return (x > y)? x: y;\n'
             '}'
         )
-        chunk = content.component.chunk
         result = zen.find_in_scope('{', chunk)
         self.assertEqual(6, result.line_i)
         self.assertEqual(0, result.col_i)
 
     def test_raises_key_error_when_char_not_present_in_scope(self):
-        content = zen.SourceContent(
+        chunk = _make_chunk(
             '\n\n\n\n'
             'std::string DoTheThing(int x) {\n'
             '    return "Foo";\n'
             '}'
         )
-        chunk = content.component.chunk
         self.assertRaises(KeyError, zen.find_in_scope, 'F', chunk)
 
 
 class TestFindScopeTokens(TestCase):
     def test_scope_tokens_are_correct(self):
-        content = zen.SourceContent(
+        chunk = _make_chunk(
             '\n\n\n\ntemplate <typename T>\n'
             'T custom_max(T x, T y)\n'
         )
-        chunk = content.component.chunk
         tokens = zen.scope_tokens(chunk)
         self.assertEqual(['template', 'T', 'custom_max'], tokens)
 
     def test_scope_tokens_skips_quotes(self):
-        content = zen.SourceContent(
-            'std::string some_str = "hi", other_str\n'
-        )
-        chunk = content.component.chunk
+        chunk = _make_chunk('std::string some_str = "hi", other_str\n')
         tokens = zen.scope_tokens(chunk)
         self.assertEqual(['std', 'string', 'some_str', 'other_str'], tokens)
 

@@ -722,7 +722,6 @@ class SourceContent:
         self._raw_hash: ty.Optional[int] = None
         self._stripped_comments: bool = False
         self._component: ty.Optional['Block'] = None
-        self._chunk: ty.Optional['Chunk'] = None
 
     def strip_comments(self) -> None:
         """
@@ -821,6 +820,18 @@ class SourceContent:
             self._component = Block(self)
         assert isinstance(self._component, Block)
         return self._component
+
+    @property
+    def chunk(self) -> 'Chunk':
+        """
+        Gets chunk containing entire content of source's content.
+
+        Equivalent to `content.component.chunk` or Chunk(content)
+
+        :return: Chunk containing entire content.
+        :rtype: Chunk
+        """
+        return self.component.chunk
 
     @staticmethod
     def _lines_from_str(content: str) -> ty.List['Line']:
