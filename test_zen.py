@@ -546,6 +546,84 @@ class TestCompileObject(TestCase):
         assert 'Foo' in keys
         assert 'Print' in keys
 
+    @staticmethod
+    def _get_test_hash_cache(
+            compile_obj: zen.CompileObject
+    ) -> ty.Dict[str, int]:
+        constructs = compile_obj.create_constructs()
+        cache = {
+            compile_obj.construct_hex(construct.name):
+                construct.content_hash
+            for construct in constructs
+        }
+        cache.update({
+            src.hex: src.stripped_hash for src in compile_obj.sources
+        })
+        return cache
+
+    def test_no_used_content_change_when_all_hashes_unchanged(self):
+        """
+        Check that CompileObject._has_used_content_change() returns
+        False when all constructs have the same content hash as is
+        present in the BuildDir hash_cache.
+        """
+        build_dir = zen.BuildDir(SAMPLE_BUILD_DIR)
+        compile_obj = zen.CompileObject(
+            path=Path(SAMPLE_BUILD_DIR, 'obj.o'),  # Unused.
+            sources=[
+                Path(SAMPLE_PROJECT_PATH, 'hello', 'hello.h'),
+                Path(SAMPLE_PROJECT_PATH, 'main.cc'),
+                Path(SAMPLE_PROJECT_PATH, 'sample.h'),
+            ],
+            build_dir=build_dir
+        )
+
+        build_dir._hash_cache = self._get_test_hash_cache(compile_obj)
+        self.assertFalse(compile_obj._has_used_content_change())
+
+    def test_content_change_found_when_hash_has_changed(self):
+        """
+        Check that CompileObject._has_used_content_change returns True
+        when a used construct's hash stored in the BuildDir hash cache
+        has changed.
+        """
+        build_dir = zen.BuildDir(SAMPLE_BUILD_DIR)
+        compile_obj = zen.CompileObject(
+            path=Path(SAMPLE_BUILD_DIR, 'obj.o'),  # Unused.
+            sources=[
+                Path(SAMPLE_PROJECT_PATH, 'hello', 'hello.h'),
+                Path(SAMPLE_PROJECT_PATH, 'main.cc'),
+                Path(SAMPLE_PROJECT_PATH, 'sample.h'),
+            ],
+            build_dir=build_dir
+        )
+
+        build_dir._hash_cache = self._get_test_hash_cache(compile_obj)
+        build_dir.hash_cache[compile_obj.construct_hex('Print')] = 0
+        self.assertTrue(compile_obj._has_used_content_change())
+
+    def test_content_change_found_when_source_hash_has_changed(self):
+        """
+        Check that CompileObject._has_used_content_change returns True
+        when a source's hash has changed.
+        """
+        build_dir = zen.BuildDir(SAMPLE_BUILD_DIR)
+        compile_obj = zen.CompileObject(
+            path=Path(SAMPLE_BUILD_DIR, 'obj.o'),  # Unused.
+            sources=[
+                Path(SAMPLE_PROJECT_PATH, 'hello', 'hello.h'),
+                Path(SAMPLE_PROJECT_PATH, 'main.cc'),
+                Path(SAMPLE_PROJECT_PATH, 'sample.h'),
+            ],
+            build_dir=build_dir
+        )
+
+        build_dir._hash_cache = self._get_test_hash_cache(compile_obj)
+        for src in compile_obj.sources:
+            if src.path.name == 'main.cc':
+                build_dir._hash_cache[src.hex] = 0
+        self.assertTrue(compile_obj._has_used_content_change())
+
 
 class TestSourceFile(TestCase):
     def tearDown(self):
