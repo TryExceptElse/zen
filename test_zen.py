@@ -377,7 +377,7 @@ class TestBuildDir(TestCase):
         )
         self.assertEqual(_out['full_build'], first_out)
         self.assertEqual(_out['no_rebuild'], second_out)
-        self.assertEqual(_out['sample_rebuild'], last_out)
+        self.assertEqual(_out['main_rebuild'], last_out)
 
     def test_change_in_any_operator_method_causes_rebuild(self):
         """

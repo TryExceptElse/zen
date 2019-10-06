@@ -1,0 +1,5 @@
+[ 40%] Built target hello
+Scanning dependencies of target sample_target
+[ 60%] Building CXX object CMakeFiles/sample_target.dir/main.cc.o
+[ 80%] Linking CXX executable sample_target
+[100%] Built target sample_target
