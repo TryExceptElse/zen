@@ -1726,18 +1726,21 @@ class Component:
                     component = CppClassDefinition(chunk[:pos + 1])
                     break
                 if '()' in s:  # Function
+                    content = chunk[:pos + 1]
                     if any(kw in prefix_tokens for
                            kw in ControlBlock.KEYWORDS):
-                        component = ControlBlock(chunk[:pos + 1])
+                        component = ControlBlock(content)
                     elif scope == ScopeType.FUNC and '[]' not in s:
                         raise ParsingException(
                             'Seemed to find function definition within'
-                            'another function definition in '
-                            f'{chunk[:pos + 1]}')
+                            f'another function definition in {content}')
                     elif scope == ScopeType.GLOBAL:
-                        component = FunctionDefinition(chunk[:pos + 1])
+                        component = FunctionDefinition(content)
                     elif scope == ScopeType.CLASS:
-                        component = MemberFunctionDefinition(chunk[:pos + 1])
+                        if MemberOperatorDefinition.is_operator(content):
+                            component = MemberOperatorDefinition(content)
+                        else:
+                            component = MemberFunctionDefinition(content)
                     break
                 # Other occurrences of curly brackets are ignored.
             else:
@@ -2072,8 +2075,12 @@ class FunctionDefinition(Component):
         super().__init__(file_content, start, end)
         self.inner_block = self._find_block()
         self.prefix: 'Chunk' = self.chunk[:self.inner_block.chunk.start]
+        self.name = self._find_name()
+
+    def _find_name(self) -> str:
         first_parenthesis = find_in_scope('(', self.chunk)
-        self.name = scope_tokens(self.chunk[:first_parenthesis])[-1]
+        name = scope_tokens(self.chunk[:first_parenthesis])[-1]
+        return name
 
     def _find_block(self) -> 'Block':
         block_start = find_in_scope('{', self.chunk)
@@ -2125,6 +2132,54 @@ class MemberFunctionDefinition(FunctionDefinition):
     @property
     def exposed_content(self) -> ty.List['Chunk']:
         return [self.prefix.strip()]
+
+
+class MemberOperatorDefinition(MemberFunctionDefinition):
+    """
+    Component containing the definition of an operator
+    overload function.
+    """
+    def _find_name(self) -> str:
+        """
+        Find name of operator being defined.
+        :return: str name of operator.
+        """
+        last_open_paren = find_in_scope('(', self.chunk)
+        try:
+            last_open_paren = find_in_scope('(', self.chunk[last_open_paren:])
+        except KeyError:
+            pass
+        operator_start_pos = find_in_scope('operator', self.chunk)
+        return self.chunk[operator_start_pos:last_open_paren]
+
+    @classmethod
+    def is_operator(cls, content: 'Chunk') -> bool:
+        """
+        Checks whether or content is that of an operator method.
+
+        :param content: Chunk
+        :return: True if content is that of an operator method,
+                    otherwise False.
+        """
+        first_parenthesis = find_in_scope('(', content)
+        name_token = scope_tokens(content[:first_parenthesis])[-1]
+        return name_token == 'operator'
+
+    @property
+    def exposed_content(self) -> ty.List['Chunk']:
+        """
+        Returns the exposed content of the operator definition.
+
+        Unlike standard method definitions, operator definitions expose
+        the entire content of their method implementation since any
+        change to the content of an operator potentially changes the
+        behavior of the class which contains it.
+
+        :return: List of exposed content chunks
+                    (In the case of MemberOperatorDefinition, a single chunk)
+        :rtype: List[Chunk]
+        """
+        return [self.chunk]
 
 
 class CppClassDefinition(Component):
