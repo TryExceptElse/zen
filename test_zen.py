@@ -1211,6 +1211,17 @@ class TestChunk(TestCase):
         )
 
 
+class TestComponent(TestCase):
+    def test_lambdas_are_recognized(self):
+        content = zen.SourceContent(_code_samples['func_body_with_lambda'])
+        statement = zen.Component.create(
+            content.component.chunk, scope=zen.ScopeType.FUNC)
+        self.assertEqual(
+            'auto f = [](string s){ std::cout << s; };',
+            str(statement.chunk),
+        )
+
+
 class TestCppClassForwardDeclaration(TestCase):
     def test_name_is_correct(self):
         content = zen.SourceContent(

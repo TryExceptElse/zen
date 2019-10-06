@@ -1,0 +1,2 @@
+auto f = [](string s){ std::cout << s; };
+std::cout << std::endl;

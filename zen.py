@@ -1756,7 +1756,7 @@ class Component:
                             f'{chunk[:pos]}')
                     component = CppClassDefinition(chunk[:pos + 1])
                     break
-                if '()' in s:  # Function
+                if '()' in s and not s.split('=')[-1] == '[]()':  # Function
                     content = chunk[:pos + 1]
                     if any(kw in prefix_tokens for
                            kw in ControlBlock.KEYWORDS):
