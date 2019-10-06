@@ -2177,7 +2177,8 @@ class MemberOperatorDefinition(MemberFunctionDefinition):
         """
         last_open_paren = find_in_scope('(', self.chunk)
         try:
-            last_open_paren = find_in_scope('(', self.chunk[last_open_paren:])
+            last_open_paren = find_in_scope(
+                '(', self.chunk[last_open_paren + 1:])
         except KeyError:
             pass
         operator_start_pos = find_in_scope('operator', self.chunk)

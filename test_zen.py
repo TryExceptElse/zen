@@ -58,15 +58,16 @@ OUT_DIR_PATH = Path(TEST_RESOURCES_PATH, 'output')
 CODE_SAMPLES_PATH = Path(TEST_RESOURCES_PATH, 'code_samples')
 
 
-def get_output_content_dict() -> ty.Dict[str, bytes]:
-    d = {}
-    for path in OUT_DIR_PATH.iterdir():
-        with path.open('rb') as f:
+def _get_samples(dir_path: Path, as_bytes=False) -> ty.Dict[str, ty.AnyStr]:
+    d: ty.Dict[str, ty.AnyStr] = {}
+    for path in dir_path.iterdir():
+        with path.open('rb') if as_bytes else path.open() as f:
             d[path.name] = f.read()
     return d
 
 
-_out: ty.Dict[str, bytes] = get_output_content_dict()
+_out = ty.cast(ty.Dict[str, bytes], _get_samples(OUT_DIR_PATH, as_bytes=True))
+_code_samples = ty.cast(ty.Dict[str, str], _get_samples(CODE_SAMPLES_PATH))
 
 
 class TestBuildDir(TestCase):
@@ -1234,12 +1235,34 @@ class TestMemberFunctionDefinition(TestCase):
         self.assertIn('Print', definition.construct_content)
 
     def test_code_preceding_function_block_is_external(self):
-        with Path(CODE_SAMPLES_PATH, 'sample_member_func').open() as src_f:
-            content_s = src_f.read()
-        content = zen.SourceContent(content_s)
+        content = zen.SourceContent(_code_samples['sample_member_func'])
         definition = zen.MemberFunctionDefinition(content.component.chunk)
         self.assertEqual(1, len(definition.construct_content))
         self.assertIn('Print', definition.construct_content)
+
+
+class TestMemberOperatorDefinition(TestCase):
+    def test_construct_is_correctly_named(self):
+        content = zen.SourceContent(_code_samples['sample_operator_func'])
+        definition = zen.MemberOperatorDefinition(content.component.chunk)
+
+        name = 'operator++'
+        self.assertEqual(1, len(definition.construct_content))
+        self.assertEqual(name, definition.name)
+        self.assertIn(name, definition.construct_content)
+
+    def test_call_operator_is_correctly_named(self):
+        """
+        Since the call operator has an extra set of parenthesis, it is
+        given its own test to ensure correct operation.
+        """
+        content = zen.SourceContent(_code_samples['sample_operator_call_func'])
+        definition = zen.MemberOperatorDefinition(content.component.chunk)
+
+        name = 'operator()'
+        self.assertEqual(1, len(definition.construct_content))
+        self.assertEqual(name, definition.name)
+        self.assertIn(name, definition.construct_content)
 
 
 class TestControlComponent(TestCase):

@@ -1,0 +1,8 @@
+
+void Foo::operator++() const {
+    std::cout << "Numbers:";
+    for (int i : numbers_) {
+        std::cout << ' ' << i;
+    }
+    std::cout << '\n';
+}
