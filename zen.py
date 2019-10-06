@@ -101,6 +101,7 @@ class BuildDir:
         self.targets_by_path = {
             target.file_path.absolute(): target
             for target in self.targets.values()
+            if target.file_path
         }
         self.sources = self._find_sources()
         self._hash_cache: ty.Optional[ty.Dict[str, int]] = None
@@ -111,7 +112,8 @@ class BuildDir:
         be rebuilt.
         :return: None
         """
-        [target.meditate() for target in self.targets.values()]
+        for target in self.targets.values():
+            target.meditate()
 
     def remember(self) -> None:
         """
@@ -132,7 +134,7 @@ class BuildDir:
         Gets list of previously built targets.
         :return: List[Target]
         """
-        targets = {}
+        targets: ty.Dict[str, 'Target'] = {}
         for target_dir in self.path.rglob('*.dir'):
             name: str = os.path.splitext(target_dir.name)[0]
             if name in targets:
@@ -189,7 +191,6 @@ class Target:
         self.path = path
         self.build_dir = build_dir
         self.objects = self._find_objects()
-        self.file_path: ty.Optional[Path] = None
         self.type: 'TargetType' = TargetType.UNKNOWN
         self.file_path, self.type = self._identify_target()
         self.dependency_paths: ty.Set[Path] = self._find_dependencies()
@@ -221,14 +222,15 @@ class Target:
 
         # Run on object dependencies.
         if self.objects:
-            [o.meditate() for o in self.objects]
+            for o in self.objects:
+                o.meditate()
             max_obj_status = max(o.status for o in self.objects)
         else:
             max_obj_status = Status.NO_CHANGE
 
         # If file_path does not exist: the target must be built,
         # and so should be considered changed.
-        if self.file_path.exists():
+        if self.file_path and self.file_path.exists():
             self.status = max((
                 max_obj_status,
                 max_lib_status,
@@ -257,6 +259,11 @@ class Target:
         This method should only be called if target is known.
         :return: None
         """
+        if self.type == TargetType.UNKNOWN:
+            raise ValueError(
+                'avoid_build should only be called if target type is known.'
+            )
+        assert self.file_path  # file path should be set if tgt type is known.
         sub.run(['touch', '-c', str(self.file_path.absolute())], check=True)
 
     @staticmethod
@@ -596,7 +603,7 @@ class SourceFile:
     same path will result in references to the same SourceFile instance
     being returned.
     """
-    _source_files = {}
+    _source_files: ty.Dict[Path, 'SourceFile'] = {}
 
     def __new__(cls, path: Path) -> 'SourceFile':
         try:
@@ -609,7 +616,7 @@ class SourceFile:
         if hasattr(self, '_initialized'):
             return
         self.path = path
-        self._access_time: ty.Optional[float] = None
+        self._access_time: float = 0
         self._content: ty.Optional['SourceContent'] = None
         self._initialized = True
 
@@ -671,7 +678,7 @@ class SourceFile:
         if self._content is None or self.m_time > self._access_time:
             self._access_time = time.time()
             with self.path.open() as f:
-                self._content = SourceContent(f)
+                self._content = SourceContent(f)  # type: ignore
         return self._content
 
     @property
@@ -884,6 +891,7 @@ class Line:
             return self.uncommented
         if form == SourceForm.STRIPPED:
             return self.stripped
+        raise ValueError(f'Unexpected SourceForm: {form}')
 
     def __repr__(self) -> str:
         preview_len = 40
@@ -1141,6 +1149,13 @@ class Chunk:
         """
         return self.index_range.stop
 
+    @ty.overload
+    def __getitem__(self, i: int) -> str: ...
+    @ty.overload
+    def __getitem__(self, i: 'SourcePos') -> str: ...
+    @ty.overload
+    def __getitem__(self, i: slice) -> 'Chunk': ...
+
     def __getitem__(
             self, i: ty.Union[int, 'SourcePos', slice]
     ) -> ty.Union[str, 'Chunk']:
@@ -1159,7 +1174,7 @@ class Chunk:
             return self._slice(i)
         return self._char_at_index(i)
 
-    def __iter__(self) -> ty.Iterable[str]:
+    def __iter__(self) -> ty.Generator[str, None, None]:
         """
         Iterate over all characters in Chunk.
         :return: str iterable yielding each character in Chunk.
@@ -1305,6 +1320,10 @@ class Chunk:
                                  f'string end for quote char at {pos}')
             elif c == end_char:
                 return pos + i + 1
+        raise ValueError(
+            'End of Chunk reached while looking for '
+            f'end of quote starting at {pos}'
+        )
 
     def strip(self) -> 'Chunk':
         """
@@ -1536,7 +1555,7 @@ class Chunk:
                                  f'{len(self)} lines in Chunk.')
             return self.chunk.file_content.lines[i + self.chunk.start.line_i]
 
-        def __iter__(self) -> ty.Iterable['Line']:
+        def __iter__(self) -> ty.Generator['Line', None, None]:
             """
             Returns generator for iterating over all lines in Chunk.
             :return: Line generator
@@ -1625,7 +1644,7 @@ class Component:
             self.chunk = file_content.strip()
         else:
             self.chunk = Chunk(file_content, start, end).strip()
-        self._tokens: ty.Optional[ty.Set[str]] = None
+        self._tokens: ty.Optional[ty.List[str]] = None
         self._tags: ty.Optional[ty.Set[str]] = None
 
     @classmethod
@@ -1775,6 +1794,7 @@ class Component:
                 return parse_tags(
                     self.chunk.first_line.s(SourceForm.RAW))
 
+            inner_components: ty.Iterable['Component']
             # Find inner components which will disqualify lines from
             # being checked for tags that apply to this component.
             if hasattr(self, 'inner_block'):
@@ -2045,7 +2065,9 @@ class MemberFunctionDeclaration(FunctionDeclaration):
     declared, and so the effect should be the same.
     """
 
-    exposed_content = Component.exposed_content
+    @property
+    def exposed_content(self) -> ty.List['Chunk']:
+        return [self.chunk]
 
 
 class CppClassForwardDeclaration(Component):
@@ -2097,9 +2119,8 @@ class FunctionDefinition(Component):
 
     @property
     def construct_content(self) -> ty.Dict[str, ty.List['Component']]:
-        # noinspection PyTypeChecker
-        content: ty.List['Component'] = [MiscStatement(self.prefix)] + \
-            self.inner_block.sub_components
+        content: ty.List['Component'] = [MiscStatement(self.prefix)]
+        content += self.inner_block.sub_components
         return {self.name: content}
 
     @property
@@ -2150,7 +2171,7 @@ class MemberOperatorDefinition(MemberFunctionDefinition):
         except KeyError:
             pass
         operator_start_pos = find_in_scope('operator', self.chunk)
-        return self.chunk[operator_start_pos:last_open_paren]
+        return str(self.chunk[operator_start_pos:last_open_paren])
 
     @classmethod
     def is_operator(cls, content: 'Chunk') -> bool:
@@ -2438,7 +2459,7 @@ class ConstructGraph:
         """
         return len(self.constructs)
 
-    def __iter__(self) -> ty.Iterable['Construct']:
+    def __iter__(self) -> ty.Generator['Construct', None, None]:
         """
         Iterates over all Constructs in the graph.
         :return: Iterable[Construct]
@@ -2539,9 +2560,6 @@ class Construct:
 
         :return: Set[Construct]
         """
-        if not self.graph:
-            raise ValueError(f'{self} does not belong to a graph.')
-
         deps: ty.Set['Construct'] = set()
         self._dep_search(self, deps, recurse=False)
         deps.discard(self)
@@ -2553,10 +2571,7 @@ class Construct:
         Gets Construct dependencies of this construct recursively.
         :return: Set[Construct]
         """
-        if not self.graph:
-            raise ValueError(f'{self} does not belong to a graph.')
-
-        deps = set()
+        deps: ty.Set['Construct'] = set()
         self._dep_search(self, deps, recurse=True)  # Adds to deps.
         deps.remove(self)
         return deps
@@ -2575,6 +2590,8 @@ class Construct:
         :param recurse:
         :return:
         """
+        if not self.graph:
+            raise ValueError(f'{self} does not belong to a graph.')
         if construct in visited:
             return
         for component in construct.content:

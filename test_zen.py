@@ -1451,6 +1451,11 @@ class TestConstruct(TestCase):
 
         assert a.content_hash != b.content_hash
 
+    def test_dependencies_raises_val_error_when_no_graph_set(self):
+        a = zen.Construct('Foo')
+        a.add_content([_make_statement('void Print() const { printf(""); }')])
+        self.assertRaises(ValueError, lambda: a.dependencies)
+
 
 # Helper functions
 
