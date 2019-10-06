@@ -58,11 +58,11 @@ OUT_DIR_PATH = Path(TEST_RESOURCES_PATH, 'output')
 CODE_SAMPLES_PATH = Path(TEST_RESOURCES_PATH, 'code_samples')
 
 
-def get_output_content_dict():
+def get_output_content_dict() -> ty.Dict[str, bytes]:
     d = {}
-    for name in os.listdir(OUT_DIR_PATH):
-        with Path(OUT_DIR_PATH, name).open('rb') as f:
-            d[name] = f.read()
+    for path in OUT_DIR_PATH.iterdir():
+        with path.open('rb') as f:
+            d[path.name] = f.read()
     return d
 
 
