@@ -927,6 +927,23 @@ class TestSourcePos(TestCase):
         b = zen.SourcePos(content, 0, 4, zen.SourceForm.STRIPPED)
         self.assertEqual(a, b)
 
+    def test_positions_with_different_indices_are_unequal(self):
+        content = zen.SourceContent('This file\nhas three\nlines.')
+        a = zen.SourcePos(content, 0, 4, zen.SourceForm.STRIPPED)
+        b = zen.SourcePos(content, 0, 5, zen.SourceForm.STRIPPED)
+        self.assertNotEqual(a, b)
+
+    def test_positions_with_different_forms_are_unequal(self):
+        content = zen.SourceContent('This file\nhas three\nlines.')
+        a = zen.SourcePos(content, 0, 4, zen.SourceForm.STRIPPED)
+        b = zen.SourcePos(content, 0, 4, zen.SourceForm.UNCOMMENTED)
+        self.assertNotEqual(a, b)
+
+    def test_comparison_with_dissimilar_type_is_false(self):
+        content = zen.SourceContent('This file\nhas three\nlines.')
+        a = zen.SourcePos(content, 0, 4, zen.SourceForm.STRIPPED)
+        self.assertNotEqual(a, object())
+
     def test_positions_with_same_indices_have_same_hash(self):
         content = zen.SourceContent('This file\nhas three\nlines.')
         a = zen.SourcePos(content, 0, 4, zen.SourceForm.STRIPPED)
