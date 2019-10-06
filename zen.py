@@ -727,6 +727,11 @@ class SourceContent:
     def strip_comments(self) -> None:
         """
         Removes comments from all lines in content.
+
+        Rather than returning a value, the stripped form of each line
+        is stored in the .uncommented member of each Line in the
+        SourceContent instance.
+
         :return: None
         """
         if self._stripped_comments:
@@ -1615,6 +1620,7 @@ def iter_hash(gen: ty.Iterable[str], accept_none: bool = False) -> int:
 # Source Components
 
 class ScopeType(enum.Enum):
+    """ Type of scope in which a component exists. """
     GLOBAL = 1
     CLASS = 2
     FUNC = 3
@@ -2633,6 +2639,7 @@ def clear() -> None:
 
 
 def main() -> None:
+    """ Main entry point for zen. """
     global verbose_opt
     parser = argparse.ArgumentParser(description='Focus compilation')
     parser.add_argument('task')
