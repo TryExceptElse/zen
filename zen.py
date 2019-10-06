@@ -2464,9 +2464,13 @@ class Construct:
 
         :return: int
         """
+        def hashed_content() -> ty.Iterable['Chunk']:
+            for component in self.content:
+                yield from component.exposed_content
+
         if self._content_hash is None:
             self._content_hash = join_hashes(
-                component.chunk.content_hash for component in self.content
+                chunk.content_hash for chunk in hashed_content()
             )
         return self._content_hash
 
