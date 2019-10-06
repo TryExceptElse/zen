@@ -1415,6 +1415,43 @@ class TestConstructGraph(TestCase):
         assert graph['Foo'] in numbers.dependencies
         assert graph['bar'] in numbers.dependencies
 
+    def test_recursive_deps_are_found(self):
+        """
+        Tests that simple dependencies of a construct are found.
+
+        This test checks that the 'numbers' construct depends upon the
+        'Foo' and 'bar' constructs, which are mentioned in
+        its statement.
+        """
+        graph = zen.ConstructGraph()
+
+        # The 'numbers' construct's content mentions 'Foo' and 'bar'.
+        graph.get('numbers', create=True).add_content([
+            _make_statement('std::vector<Foo> numbers = bar.get();')
+        ])
+        graph.get('Foo', create=True).add_content([
+            _make_statement('class Foo {};')  # Content unimportant
+        ])
+        graph.get('Herring0', create=True).add_content([
+            _make_statement('printf("Red");')  # Content unimportant
+        ])
+        graph.get('Herring1', create=True).add_content([
+            _make_statement('printf("Herring");')  # Content unimportant
+        ])
+        graph.get('val', create=True).add_content([
+            _make_statement('constexpr uint8_t val = 0;')
+        ])
+        graph.get('bar', create=True).add_content([
+            _make_statement('std::vector<Foo> get() { return {val}; }')
+        ])
+
+        numbers = graph['numbers']
+
+        assert len(numbers.recursive_dependencies) == 3
+        assert graph['Foo'] in numbers.recursive_dependencies
+        assert graph['bar'] in numbers.recursive_dependencies
+        assert graph['val'] in numbers.recursive_dependencies
+
     def test_in_operator(self):
         graph = zen.ConstructGraph()
         graph.get('numbers', create=True).add_content([

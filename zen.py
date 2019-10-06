@@ -2598,8 +2598,6 @@ class Construct:
         """
         if not self.graph:
             raise ValueError(f'{self} does not belong to a graph.')
-        if construct in visited:
-            return
         for component in construct.content:
             for dep in component.used_constructs(
                     self.graph.constructs).values():
