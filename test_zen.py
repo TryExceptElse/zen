@@ -1044,6 +1044,18 @@ class TestChunk(TestCase):
         hash_b = chunk_b.content_hash
         self.assertNotEqual(hash_a, hash_b)
 
+    def test_hash_differs_if_single_line_content_does(self):
+        a = zen.Chunk(zen.SourceContent('void Print() const'))
+        b = zen.Chunk(zen.SourceContent('printf("Spam");'))
+        self.assertNotEqual(a.content_hash, b.content_hash)
+
+    def test_basic_line_strings(self):
+        chunk = zen.Chunk(zen.SourceContent('This file\nhas three\nlines.'))
+        self.assertEqual(
+            ['This file\n', 'has three\n', 'lines.'],
+            [line for line in chunk.line_strings]
+        )
+
 
 class TestCppClassForwardDeclaration(TestCase):
     def test_name_is_correct(self):

@@ -1377,6 +1377,8 @@ class Chunk:
             if c == '\n':
                 yield line_s
                 line_s = ''
+        if line_s:
+            yield line_s
 
     @property
     def start(self) -> 'SourcePos':
